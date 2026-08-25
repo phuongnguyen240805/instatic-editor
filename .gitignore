@@ -1,0 +1,85 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+!vendor/pixel-art-icons/dist/
+!vendor/pixel-art-icons/dist/**
+dist-ssr
+.worktrees/
+.superpowers/
+.claude/
+.tmp/
+.tmp-lint/
+.coverage/
+coverage/
+.matrix/
+*.local
+
+# Local SQLite dev databases — runtime state, never source
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Generated audit reports
+/instatic-audit-report.html
+/instatic-audit-report.json
+
+# Environment variable files — never commit secrets
+# *.local already covers .env.local / .env.development.local etc.
+# These explicit entries cover bare .env and non-local variants.
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/agent-browser/
+!.agents/skills/agent-browser/**
+!.agents/skills/skill-creator/
+!.agents/skills/skill-creator/**
+!.agents/skills/instatic-user-e2e/
+!.agents/skills/instatic-user-e2e/**
+.skills/
+
+# User uploads — runtime data, never commit
+# (real user media has PII risk; plugin/font runtime artifacts are not source)
+uploads/*
+!uploads/.gitkeep
+
+# E2E test run artifacts — generated, not source
+docs/e2e/runs
+
+# Agent implementation plans — local planning artifacts, never source
+docs/plans/
+docs/superpowers/
+
+# Plugin build artifacts — generated from source plugin directories
+*.plugin.zip
+
+# Loose smoke-test screenshots dropped at the repo root by agent-browser runs.
+# Persisted captures belong under docs/ or marketing/assets/, not the root.
+/*.png
+
+# AI coding-tool scratch/config dirs — local tooling, never source
+.factory/
+.trae/
+.windsurf/

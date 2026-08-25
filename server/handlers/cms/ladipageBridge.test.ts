@@ -1,0 +1,154 @@
+import { describe, expect, test } from 'bun:test'
+import { createSqliteClient } from '../../db/sqlite'
+import { sqliteMigrations } from '../../db/migrations-sqlite'
+import { runMigrations } from '../../db/runMigrations'
+import type { DbClient } from '../../db/client'
+import { listDataRows } from '../../repositories/data'
+import { getDraftSite, saveDraftSite } from '../../repositories/site'
+import { pageFromRow } from '../../../src/core/data/pageFromRow'
+import { handleLadipageBridgeRoutes } from './ladipageBridge'
+import {
+  createDefaultSiteExplorerOrganization,
+  DEFAULT_BREAKPOINTS,
+  DEFAULT_SITE_SETTINGS,
+  type SiteShell,
+} from '@core/page-tree'
+
+const fakeDb = {} as never
+
+async function createInMemoryTestDb(): Promise<DbClient> {
+  const db = createSqliteClient(':memory:')
+  await runMigrations(db, sqliteMigrations)
+  return db
+}
+
+async function saveTestShell(db: DbClient): Promise<void> {
+  const shell: SiteShell = {
+    id: 'default',
+    name: 'Test Site',
+    breakpoints: DEFAULT_BREAKPOINTS,
+    settings: structuredClone(DEFAULT_SITE_SETTINGS),
+    styleRules: {},
+    files: [],
+    explorer: createDefaultSiteExplorerOrganization(),
+    packageJson: { dependencies: {}, devDependencies: {} },
+    runtime: { styles: {}, scripts: {}, dependencyLock: null },
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  }
+  await saveDraftSite(db, shell)
+}
+
+describe('handleLadipageBridgeRoutes', () => {
+  test('ensure-page returns siteId/pageId', async () => {
+    const db = await createInMemoryTestDb()
+      const req = new Request('http://localhost/admin/api/cms/ladipage/ensure-page', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ siteKey: 'ws_1', pageKey: 'p1', title: 'T' }),
+      })
+      const res = await handleLadipageBridgeRoutes(req, db)
+      expect(res).not.toBeNull()
+      expect(res!.status).toBe(200)
+      const body = await res!.json()
+      expect(body.siteId).toBe('ws_1')
+      expect(body.pageId).toBe('p1')
+
+      const rows = await listDataRows(db, 'pages')
+      expect(rows.map((row) => row.id)).toContain('p1')
+      expect(rows.find((row) => row.id === 'p1')?.slug).toBe('t')
+  })
+
+  test('ensure-page keeps separate Ladipage rows instead of reusing Home', async () => {
+    const db = await createInMemoryTestDb()
+      for (const pageKey of ['page_lp_a', 'page_lp_b']) {
+        const req = new Request('http://localhost/admin/api/cms/ladipage/ensure-page', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ siteKey: 'ws_1', pageKey, title: 'Landing' }),
+        })
+        const res = await handleLadipageBridgeRoutes(req, db)
+        expect(res!.status).toBe(200)
+        const body = await res!.json()
+        expect(body.pageId).toBe(pageKey)
+      }
+
+      const rows = await listDataRows(db, 'pages')
+      const byId = new Map(rows.map((row) => [row.id, row]))
+      expect(byId.has('page_lp_a')).toBe(true)
+      expect(byId.has('page_lp_b')).toBe(true)
+      expect(byId.get('page_lp_a')?.slug).toBe('landing')
+      expect(byId.get('page_lp_b')?.slug).toBe('landing-2')
+  })
+
+  test('import-html persists imported nodes into the Ladipage draft page', async () => {
+    const db = await createInMemoryTestDb()
+    const req = new Request('http://localhost/admin/api/cms/ladipage/import-html', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        siteId: 'ws_1',
+        pageId: 'p1',
+        title: 'Imported',
+        html: '<main><h1>Hello</h1><p>World</p></main>',
+      }),
+    })
+
+    const res = await handleLadipageBridgeRoutes(req, db)
+    expect(res!.status).toBe(200)
+    const body = await res!.json()
+    expect(body.imported).toBe(true)
+    expect(body.importedNodeCount).toBeGreaterThan(0)
+
+    const rows = await listDataRows(db, 'pages')
+    const row = rows.find((candidate) => candidate.id === 'p1')
+    expect(row).toBeDefined()
+    const page = pageFromRow(row!)
+    const root = page.nodes[page.rootNodeId]
+    expect(page.title).toBe('Imported')
+    expect(root.children.length).toBeGreaterThan(0)
+    expect(Object.values(page.nodes).some((node) => node.moduleId === 'base.text')).toBe(true)
+  })
+
+  test('import-html links imported class names to persisted style rules', async () => {
+    const db = await createInMemoryTestDb()
+    await saveTestShell(db)
+    const req = new Request('http://localhost/admin/api/cms/ladipage/import-html', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        pageId: 'p1',
+        title: 'Styled',
+        html: '<style>.hero{color:red}</style><main class="hero"><h1>Styled</h1></main>',
+      }),
+    })
+
+    const res = await handleLadipageBridgeRoutes(req, db)
+    expect(res!.status).toBe(200)
+
+    const site = await getDraftSite(db)
+    const heroRule = Object.values(site!.styleRules).find((rule) => rule.name === 'hero')
+    expect(heroRule).toBeDefined()
+    expect(heroRule!.styles.color).toBe('red')
+
+    const row = (await listDataRows(db, 'pages')).find((candidate) => candidate.id === 'p1')
+    const page = pageFromRow(row!)
+    const importedNode = Object.values(page.nodes).find((node) => node.classIds.includes(heroRule!.id))
+    expect(importedNode).toBeDefined()
+    expect(importedNode!.classIds).not.toContain('hero')
+  })
+
+  test('unknown ladipage path is 404 with path', async () => {
+    const req = new Request('http://localhost/admin/api/cms/ladipage/nope', { method: 'GET' })
+    const res = await handleLadipageBridgeRoutes(req, fakeDb)
+    expect(res!.status).toBe(404)
+    const body = await res!.json()
+    expect(body.error).toBe('Not found')
+  })
+
+  test('non-prefix returns null', async () => {
+    const req = new Request('http://localhost/admin/api/cms/other', { method: 'GET' })
+    const res = await handleLadipageBridgeRoutes(req, fakeDb)
+    expect(res).toBeNull()
+  })
+})

@@ -1,0 +1,47 @@
+name: Deployment help
+description: Ask for help with Docker, Railway, Render, or another host.
+title: "[Deploy]: "
+labels:
+  - deployment
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste secrets. Redact passwords, tokens, connection strings, and private hostnames.
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target
+      options:
+        - Docker Compose with SQLite
+        - Docker Compose with Postgres
+        - Railway
+        - Render
+        - Generic Docker host
+        - Direct Bun install
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to deploy, and where does it fail?
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant configuration
+      description: Paste Compose snippets, environment variable names, or platform settings with values redacted.
+      render: yaml
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant logs with secrets redacted.
+      render: shell
+    validations:
+      required: false

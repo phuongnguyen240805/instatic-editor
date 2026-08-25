@@ -1,0 +1,52 @@
+/* ContextMeter — compact single-line "context used / window" indicator in the
+   chat composer. Achromatic by default; the fill shifts to amber/red as a
+   state signal when the window is nearly full. */
+
+.meter {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+    padding: var(--space-4xs) var(--space-4xs) var(--space-xs);
+    font-size: var(--text-2xs);
+    color: var(--text-subtle);
+}
+
+.label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.track {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 4px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-surface-3);
+    overflow: hidden;
+}
+
+.fill {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: var(--ctx-fill);
+    border-radius: var(--radius-sm);
+    background: var(--text-subtle);
+    transition: width 240ms ease;
+}
+
+.track[data-tone="warning"] .fill {
+    background: var(--warning);
+}
+
+.track[data-tone="danger"] .fill {
+    background: var(--danger);
+}
+
+.count {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}

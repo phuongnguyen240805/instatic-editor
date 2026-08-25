@@ -1,0 +1,48 @@
+name: instatic-prod
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-instatic}
+      POSTGRES_USER: ${POSTGRES_USER:-instatic}
+      # Placeholder default lets the file load without an .env (e.g. SQLite mode,
+      # which disables this service). Postgres deployments MUST override this in
+      # .env — see docs/deployment/vps.md.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGEME_set_POSTGRES_PASSWORD_in_env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ${INSTATIC_IMAGE:-ghcr.io/corebunch/instatic:latest}
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-3001}:3001"
+    environment:
+      PORT: "3001"
+      DATABASE_URL: postgres://${POSTGRES_USER:-instatic}:${POSTGRES_PASSWORD:-CHANGEME_set_POSTGRES_PASSWORD_in_env}@postgres:5432/${POSTGRES_DB:-instatic}
+      UPLOADS_DIR: /app/uploads
+      STATIC_DIR: /app/dist
+      INSTATIC_SECRET_KEY: ${INSTATIC_SECRET_KEY:-}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-}
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "run", "server/healthcheck.ts"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  postgres_data:
+  uploads:

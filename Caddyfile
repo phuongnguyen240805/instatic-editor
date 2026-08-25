@@ -1,0 +1,29 @@
+# Caddyfile — used by compose.tls.yml.
+#
+# {$DOMAIN}            from .env (required, e.g. cms.example.com)
+# {$LETSENCRYPT_EMAIL} from .env (optional; recommended for cert expiry notices)
+#
+# Caddy auto-provisions a Let's Encrypt certificate on first request and renews
+# it on its own. Cert state lives in the caddy_data volume so it survives
+# container recreation.
+
+{
+	# Empty value is fine — Caddy treats it as "no contact email" and uses
+	# the default Let's Encrypt anonymous account.
+	email {$LETSENCRYPT_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3001
+
+	# HSTS, content sniffing, framing — sensible defaults.
+	# `frame-ancestors 'self'` lets the editor preview its own pages in an
+	# iframe but blocks third-party framing (clickjacking).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Content-Security-Policy "frame-ancestors 'self'"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

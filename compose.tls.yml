@@ -1,0 +1,78 @@
+# compose.tls.yml
+# Override for compose.prod.yml that puts a Caddy reverse proxy in front of the
+# CMS, terminating TLS via Let's Encrypt automatically. Stack-on-top usage:
+#
+#   docker compose -f compose.prod.yml -f compose.tls.yml up -d                   # PG + TLS
+#   docker compose -f compose.prod.yml -f compose.sqlite.yml -f compose.tls.yml up -d   # SQLite + TLS
+#
+# What this does:
+#   - Adds a `caddy` service that listens on :80 and :443 (and :443/udp for HTTP/3).
+#   - Caddy auto-provisions and renews a Let's Encrypt certificate for ${DOMAIN}.
+#   - Caddy proxies all traffic to app:3001 over the internal Docker network.
+#   - Removes the `app` host port mapping so the only public surface is Caddy.
+#
+# Prerequisites:
+#   - DOMAIN env var set in .env (e.g. cms.example.com).
+#   - DNS A/AAAA records for that domain already pointing at this server.
+#   - Ports 80 and 443 reachable from the public internet (Let's Encrypt
+#     HTTP-01 / TLS-ALPN-01 challenges).
+#
+# The Caddyfile lives next to this file at ./Caddyfile and is mounted read-only.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env to enable TLS, e.g. cms.example.com}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+    volumes:
+      # Long-form bind syntax with `create_host_path: false` makes the failure
+      # explicit at `docker compose up` time if Caddyfile is missing on the
+      # host. Without this, Docker silently creates an empty directory at the
+      # bind path and Caddy crashes later with a confusing error.
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind:
+          create_host_path: false
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      # Caddy's admin API (default 127.0.0.1:2019) is the cheapest liveness
+      # probe — it only checks that the Caddy process is up. We don't probe
+      # ${DOMAIN} from inside the container because the cert may legitimately
+      # not be ready yet during the first few seconds.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  app:
+    # When Caddy is in front, the app should not also be exposed directly on
+    # the host — visitors hit Caddy on 80/443, Caddy proxies to app:3001 over
+    # the docker network. `!reset` clears the ports list inherited from
+    # compose.prod.yml.
+    ports: !reset []
+    environment:
+      # Caddy terminates TLS and proxies plain HTTP to app:3001, so the app's
+      # own request URL is http://app:3001. PUBLIC_ORIGIN tells Instatic the
+      # real public origin for its CSRF check — derived from ${DOMAIN}.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-https://${DOMAIN}}
+      # Attribution only (audit logs / rate-limit keys), NOT CSRF: trust
+      # X-Forwarded-For from the Docker bridge range where Caddy connects from.
+      # The app port is not exposed in this override, so public clients cannot
+      # reach the app directly and spoof X-Forwarded-For.
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-172.16.0.0/12}
+
+volumes:
+  caddy_data:
+  caddy_config:

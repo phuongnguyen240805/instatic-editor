@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/admin/main.tsx",
+    "server/index.ts",
+    "server/healthcheck.ts",
+    "scripts/**/*.ts",
+    "src/__tests__/**/*.{test,spec}.{ts,tsx}",
+    "src/__tests__/**/*.test-d.{ts,tsx}",
+    "server/**/__tests__/**/*.test.ts",
+    "server/plugins/quickjs/bootstrap/src/*.ts",
+    "src/admin/plugin-host-ui/index.ts",
+    "src/admin/plugin-host-hooks/index.ts",
+    "src/core/plugin-sdk/index.ts",
+    "src/core/plugin-sdk/cli/*.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "server/**/*.ts",
+    "scripts/**/*.ts"
+  ],
+  "ignore": [
+    "src/ui/icons/icons/**",
+    "examples/plugins/**",
+    "src/ui/icons/icon-browser.html"
+  ],
+  "ignoreDependencies": [
+    "@fontsource-variable/inter",
+    "dependency-cruiser",
+    "jscpd",
+    "knip",
+    "madge",
+    "secretlint",
+    "@secretlint/secretlint-rule-preset-recommend"
+  ]
+}

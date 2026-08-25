@@ -1,0 +1,27 @@
+# compose.sqlite.yml
+# Override for compose.prod.yml that runs the CMS against SQLite instead of Postgres.
+# Usage: docker compose -f compose.prod.yml -f compose.sqlite.yml up -d
+#
+# What this does:
+#   - Disables the postgres service (moved to the _disabled profile).
+#   - Points DATABASE_URL at a SQLite file inside the container's /app/data volume.
+#   - Mounts a named volume at /app/data so the database survives container restarts.
+#   - Removes the postgres health-check dependency from the app service.
+
+services:
+  postgres:
+    profiles: ['_disabled']
+
+  app:
+    environment:
+      DATABASE_URL: sqlite:/app/data/cms.db
+    volumes:
+      - data:/app/data
+    # `!reset` is required (compose v2) — without it, plain `depends_on: {}` is
+    # *merged* with the parent file's depends_on instead of replacing it, leaving
+    # the now-profile-disabled `postgres` dependency in place. With `!reset {}`
+    # the dependency is fully cleared so the app starts standalone.
+    depends_on: !reset {}
+
+volumes:
+  data:

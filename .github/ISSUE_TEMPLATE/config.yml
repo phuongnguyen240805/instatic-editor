@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/corebunch/instatic/security/advisories/new
+    about: Report vulnerabilities privately. Do not open public security issues with exploit details.
+  - name: Deployment docs
+    url: https://github.com/corebunch/instatic/tree/main/docs/deployment
+    about: Read the supported Docker, Railway, Render, VPS, TLS, and backup guides.

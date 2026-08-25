@@ -1,0 +1,134 @@
+/* ModelPicker — trigger chrome + inline menu-row styling only. The dropdown
+   surface, scroll, and search header all come from the shared ContextMenu
+   primitive. */
+
+.root {
+    position: relative;
+}
+
+/* ── Field trigger (AI settings → Defaults) — looks like a Select. Layout
+   (full width, space-between, height) comes from Button's `fullWidth` +
+   `align="between"` + `size="md"`; this only adds the field skin. ───────── */
+.fieldTrigger {
+    gap: var(--space-s);
+    padding: var(--space-xs) var(--space-m);
+    background: transparent;
+    border: 1px solid var(--overlay-20);
+    color: var(--text);
+    font-size: var(--text-s);
+    font-weight: 400;
+}
+
+.fieldTrigger:hover {
+    border-color: var(--overlay-30);
+    background: transparent;
+}
+
+.fieldTrigger[aria-expanded="true"] {
+    background: transparent;
+    border-color: var(--overlay-50);
+    box-shadow: var(--focus-ring);
+}
+
+/* ── Inline trigger (chat composer toolbar) — compact ghost button ─────── */
+.inlineTrigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3xs);
+    max-width: 200px;
+}
+
+.triggerLabel {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.inlineTrigger .triggerLabel {
+    font-size: var(--text-2xs);
+}
+
+.fieldTrigger .triggerLabel {
+    flex: 1;
+    min-width: 0;
+}
+
+.triggerPlaceholder {
+    color: var(--text-subtle);
+}
+
+.staticState {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    max-width: 200px;
+    color: var(--text-subtle);
+    font-size: var(--text-2xs);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* ── Menu rows ─────────────────────────────────────────────────────────── */
+/* Non-interactive group header row. Aligned to the item text inset; rendered
+   as a plain element so it isn't dimmed by the disabled-Button opacity. */
+.groupHeaderRow {
+    padding: var(--space-xs) var(--space-m) var(--space-4xs);
+}
+
+.groupHeader {
+    font-size: var(--text-2xs);
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.groupProvider {
+    color: var(--text-subtle);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* Label takes the available width; the meta cluster keeps its natural size.
+   Ellipsis is only a last-resort safety — the wider menu fits full names. */
+.modelLabel {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Right-aligned meta cluster: price + context window. Pushed to the trailing
+   edge so model labels stay left-aligned and scannable. */
+.modelMeta {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-m);
+    margin-inline-start: auto;
+    padding-inline-start: var(--space-l);
+    flex-shrink: 0;
+}
+
+/* Readable secondary text (not the dim muted/subtle tones) — these carry real
+   information, so they need clear contrast against the menu surface. */
+.modelPrice {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.modelContext {
+    color: var(--text-muted);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.emptyOption {
+    padding: var(--space-xs) var(--space-m);
+    font-size: var(--text-s);
+    color: var(--text-subtle);
+}

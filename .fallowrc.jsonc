@@ -1,0 +1,132 @@
+{
+  "$schema": "https://fallow.tools/schema/fallow.json",
+
+  // Additional entry points fallow can't infer from package.json:
+  //   - server/healthcheck.ts is invoked by the Dockerfile HEALTHCHECK and
+  //     compose.prod.yml's healthcheck block (Docker, not JS).
+  //   - scripts/build-google-fonts.ts is a manually-run dev script that
+  //     refreshes src/core/fonts/google-fonts.json.
+  //   - scripts/generate-secret-key.ts is a manually-run ops helper that
+  //     prints a fresh AI master key; server/ai/credentials/masterKey.ts
+  //     points operators at it from its error messages.
+  //   - marketing/*.html are standalone static marketing pages. Their CSS is
+  //     linked from HTML, not imported by the app's JS graph.
+  "entry": [
+    "server/healthcheck.ts",
+    "scripts/build-google-fonts.ts",
+    "scripts/generate-secret-key.ts",
+    "marketing/index.html",
+    "marketing/fonts.html"
+  ],
+
+  // Example plugins are zip-distributable user code that gets loaded at runtime
+  // via plugin.json — fallow can't see those manifest references. They are not
+  // part of the CMS import graph, so exclude them from analysis entirely.
+  "ignorePatterns": [
+    "examples/plugins/**",
+    "src/ui/icons/icon-browser.html",
+    "vendor/**",
+    ".tmp/**",
+
+    // Intentional doc-only `export {}` barrels. They deliberately export
+    // nothing — each carries a comment telling devs to deep-import the
+    // per-module file so rolldown can code-split (the barrel would defeat
+    // tree-shaking / the React.lazy boundary). Nothing imports them, so
+    // fallow flags them as unused files; exclude them from analysis.
+    "src/admin/layouts/index.ts",
+    "src/admin/modals/Settings/index.ts"
+  ],
+
+  // Loaded from src/styles/globals.css via a targeted @font-face URL. Fallow
+  // only sees JS/TS import edges, so this CSS asset dependency is intentionally
+  // declared here.
+  "ignoreDependencies": ["@fontsource-variable/inter"],
+
+  // CSS-modules `:global(.cm-editor)` reaches into the CodeMirror runtime tree
+  // (CM6 stamps that class on the editor root). Fallow's CSS parser doesn't
+  // recognise `:global()` and would otherwise flag the class as an unused
+  // export.
+  // Test helpers use `new URL('../../', import.meta.url)` and
+  // `fileURLToPath(new URL(...))` to resolve repo-relative paths at runtime.
+  // Fallow's parser mistakes the URL-constructor's first arg for an ES
+  // import specifier — disable the rule for test files where this is the
+  // only legitimate usage.
+  "overrides": [
+    {
+      "files": ["src/__tests__/**/*.ts", "src/__tests__/**/*.tsx"],
+      "rules": { "unresolved-imports": "off" }
+    }
+  ],
+
+  "ignoreExports": [
+    // CSS-modules class names are scoped/hashed at build time, not real ES
+    // exports. Fallow surfaces each class as an "export", so identical class
+    // names across different *.module.css files (e.g. `container`, `divider`,
+    // `size-md`) get flagged as duplicate exports even though the collisions
+    // are inert — CSS modules never share an import target. Exclude every
+    // CSS-module file from duplicate-export grouping.
+    {
+      "file": "**/*.module.css",
+      "exports": ["*"]
+    },
+
+    {
+      "file": "src/admin/pages/site/code-editor/CodeEditorPanel.module.css",
+      "exports": ["cm-editor"]
+    },
+
+    // Plugin SDK public surface — consumed by external plugin authors via
+    // `@instatic/plugin-sdk`. Fallow can't see those consumers.
+    {
+      "file": "src/core/plugin-sdk/builders/index.ts",
+      "exports": [
+        "DefinePluginConfig",
+        "PluginDefinition",
+        "PluginSettingValue",
+        "PluginSettingsValues",
+        "PluginPackContents",
+        "PermissionAlias",
+        "PluginNamespace",
+        "PluginAdminAppProps",
+        "DefinePluginEditorPanelConfig",
+        "PluginEditorPanelComponent",
+        "PluginEditorPanelProps",
+        "DefinePluginCanvasOverlayConfig",
+        "PluginCanvasOverlayComponent",
+        "PluginCanvasOverlayProps"
+      ]
+    },
+    {
+      "file": "src/core/plugin-sdk/builders/permissions.ts",
+      "exports": ["PermissionAlias"]
+    },
+    {
+      "file": "src/core/plugin-sdk/types/commands.ts",
+      "exports": ["PluginPaletteCommand"]
+    },
+    {
+      "file": "src/core/plugin-sdk/types/routes.ts",
+      "exports": ["RouteMethod"]
+    },
+    {
+      "file": "src/core/plugin-sdk/types/serverApi.ts",
+      "exports": ["ServerPluginModule"]
+    },
+
+    // Plugin host-ui / host-hooks barrels — the entire named surface of these
+    // two modules IS the `@instatic/host-ui` + `@instatic/host-hooks`
+    // plugin contract. Plugins consume them via a dynamic
+    // `import('@admin/plugin-host-ui')` namespace in
+    // `src/admin/pluginRuntimeBootstrap.ts` (member access, which fallow can't
+    // trace) and the contract is pinned by
+    // `plugin-host-ui-runtime-parity.test.ts`. Suppress the whole barrel.
+    {
+      "file": "src/admin/plugin-host-ui/index.ts",
+      "exports": ["*"]
+    },
+    {
+      "file": "src/admin/plugin-host-hooks/index.ts",
+      "exports": ["*"]
+    }
+  ]
+}

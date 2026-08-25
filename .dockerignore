@@ -1,0 +1,21 @@
+.git
+.worktrees
+.DS_Store
+node_modules
+dist
+.tmp
+uploads
+data
+backups
+*.sqlite
+*.sqlite-*
+.env
+.env.*
+!.env.example
+!.env.production.example
+docs/superpowers
+
+# Test sources are verified in CI but are not needed in production images.
+**/__tests__
+**/*.test.ts
+**/*.test.tsx

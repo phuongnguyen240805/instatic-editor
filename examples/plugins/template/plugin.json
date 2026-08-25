@@ -1,0 +1,26 @@
+{
+  "id": "acme.template",
+  "name": "Template Plugin",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "Starter template demonstrating the Instatic plugin SDK — server lifecycle hooks, editor commands, and Command Spotlight (⌘K) integration.",
+  "permissions": [
+    "cms.routes",
+    "editor.code",
+    "editor.commands",
+    "editor.toolbar"
+  ],
+  "resources": [],
+  "adminPages": [],
+  "entrypoints": {
+    "server": "server/index.js",
+    "editor": "editor/index.js"
+  },
+  "author": {
+    "name": "Your Name",
+    "email": "you@example.com",
+    "url": "https://example.com"
+  },
+  "license": "MIT",
+  "keywords": ["template", "starter"]
+}
