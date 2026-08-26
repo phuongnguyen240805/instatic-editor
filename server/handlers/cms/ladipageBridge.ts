@@ -71,7 +71,7 @@ async function ensureServerDomParser(): Promise<void> {
     CSSStyleSheet: typeof CSSStyleSheet
   }
   target.DOMParser = window.DOMParser as typeof DOMParser
-  target.CSSStyleSheet = window.CSSStyleSheet as typeof CSSStyleSheet
+  target.CSSStyleSheet = window.CSSStyleSheet as unknown as typeof CSSStyleSheet
 }
 
 function stampParentIds(
