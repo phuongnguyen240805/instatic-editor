@@ -23,6 +23,7 @@ import { applyPublishedHtmlPipeline } from '../../publish/publishedHtmlPipeline'
 import { readArtefact } from '../../publish/staticArtefact'
 import { nanoid } from 'nanoid'
 import { classKindSelector, createNode, type PageNode, type SiteShell, type StyleRule } from '@core/page-tree'
+import { DEFAULT_SITE_RUNTIME, DEFAULT_STYLE_RUNTIME_CONFIG } from '@core/site-runtime'
 import type { Page } from '@core/page-tree'
 import { importHtml } from '@core/htmlImport'
 import { cssToStyleRules, type NewStyleRule } from '@core/siteImport'
@@ -345,6 +346,36 @@ async function buildArtifactHtml(
   return null
 }
 
+async function upsertImportedStylesheet(
+  db: DbClient,
+  pageId: string,
+  css: string,
+): Promise<void> {
+  const shell = await getDraftSite(db)
+  if (!shell) return
+  const safeId = pageId.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 80) || 'page'
+  const path = `imported/ladipage-${safeId}.css`
+  const files = Array.isArray(shell.files) ? [...shell.files] : []
+  const existing = files.find((file) => file.path === path)
+  const id = existing?.id ?? nanoid()
+  const nextFile = { id, path, type: 'style' as const, content: css }
+  const nextFiles = [...files.filter((file) => file.id !== id && file.path !== path), nextFile]
+  const runtime = shell.runtime ?? DEFAULT_SITE_RUNTIME
+  const nextShell: SiteShell = {
+    ...shell,
+    files: nextFiles,
+    runtime: {
+      ...runtime,
+      styles: {
+        ...(runtime.styles ?? {}),
+        [id]: { ...DEFAULT_STYLE_RUNTIME_CONFIG, priority: 10 },
+      },
+    },
+    updatedAt: Date.now(),
+  }
+  await saveDraftSite(db, nextShell, null)
+}
+
 function isPageTreeEmpty(page: Page | null): boolean {
   if (!page?.rootNodeId) return true
   const root = page.nodes[page.rootNodeId]
@@ -451,6 +482,7 @@ export async function handleLadipageBridgeRoutes(
       pageId: Type.Optional(Type.String()),
       html: Type.Optional(Type.String()),
       title: Type.Optional(Type.String()),
+      linkedCss: Type.Optional(Type.String()),
       replaceIfEmpty: Type.Optional(Type.Boolean()),
       assetOrigin: Type.Optional(Type.String()),
     })
@@ -486,6 +518,11 @@ export async function handleLadipageBridgeRoutes(
           null,
         )
       }
+    }
+
+    const linkedCss = body.linkedCss?.trim() ?? ''
+    if (linkedCss) {
+      await upsertImportedStylesheet(db, pageId, linkedCss)
     }
 
     return jsonResponse({
