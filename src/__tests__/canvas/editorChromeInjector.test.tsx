@@ -17,6 +17,9 @@ afterEach(cleanup)
 /** A detached document whose :root carries admin typography and spacing tokens. */
 function makeParentDoc(): Document {
   document.documentElement.style.setProperty('--font-sans', '"Inter Variable", system-ui, sans-serif')
+  document.documentElement.style.setProperty('--text', '#ededed')
+  document.documentElement.style.setProperty('--text-subtle', '#787878')
+  document.documentElement.style.setProperty('--bg-body', '#ffffff')
   document.documentElement.style.setProperty('--text-xs', 'clamp(10px, calc(9.629px + 0.095vw), 11px)')
   document.documentElement.style.setProperty('--text-s', 'clamp(11px, calc(10.629px + 0.095vw), 12px)')
   document.documentElement.style.setProperty('--space-s', 'clamp(6px, calc(5.257px + 0.19vw), 8px)')
@@ -47,12 +50,20 @@ describe('EditorChromeInjector font isolation', () => {
 
     // It must NEVER set the site's own Framework tokens on :root, nor
     // reference them — doing so clobbers token values for all canvas content.
+    expect(css).toContain('--chrome-text: #ededed;')
+    expect(css).toContain('--chrome-text-subtle: #787878;')
+    expect(css).toContain('--chrome-bg-body: #ffffff;')
+    expect(css).toContain('color: var(--chrome-text-subtle);')
     expect(css).not.toMatch(/^\s*--font-sans:/m)
     expect(css).not.toContain('var(--font-sans)')
+    expect(css).not.toMatch(/^\s*--text:/m)
     expect(css).not.toMatch(/^\s*--text-s:/m)
     expect(css).not.toMatch(/^\s*--text-xs:/m)
+    expect(css).not.toMatch(/^\s*--bg-body:/m)
     expect(css).not.toContain('var(--text-s)')
     expect(css).not.toContain('var(--text-xs)')
+    expect(css).not.toContain('var(--text)')
+    expect(css).not.toContain('var(--bg-body)')
     expect(css).not.toMatch(/^\s*--space-s:/m)
     expect(css).not.toMatch(/^\s*--space-xl:/m)
     expect(css).not.toContain('var(--space-s)')

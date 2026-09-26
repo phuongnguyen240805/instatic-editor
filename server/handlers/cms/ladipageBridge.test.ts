@@ -136,6 +136,76 @@ describe('handleLadipageBridgeRoutes', () => {
     const importedNode = Object.values(page.nodes).find((node) => node.classIds.includes(heroRule!.id))
     expect(importedNode).toBeDefined()
     expect(importedNode!.classIds).not.toContain('hero')
+
+    const importedSheet = site!.files.find((file) => file.path === 'imported/ladipage-p1.css')
+    expect(importedSheet?.type).toBe('style')
+    expect(importedSheet?.content).toContain('.hero{color:red}')
+  })
+
+  test('import-html upserts :root variables as a raw stylesheet', async () => {
+    const db = await createInMemoryTestDb()
+    await saveTestShell(db)
+    const req = new Request('http://localhost/admin/api/cms/ladipage/import-html', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        pageId: 'p1',
+        title: 'Restaurant',
+        html: '<style>:root{--text-color:#707070;--body-color:#FBFEFD}body{color:var(--text-color);background-color:var(--body-color)}.bd-grid{display:grid}</style><div class="bd-grid"><h1>Tasty food</h1></div>',
+        linkedCss: '.extra{display:flex}',
+      }),
+    })
+
+    const res = await handleLadipageBridgeRoutes(req, db)
+    expect(res!.status).toBe(200)
+
+    const site = await getDraftSite(db)
+    const importedSheet = site!.files.find((file) => file.path === 'imported/ladipage-p1.css')
+    expect(importedSheet?.type).toBe('style')
+    expect(importedSheet?.content).toContain('--text-color:#707070')
+    expect(importedSheet?.content).toContain('.bd-grid{display:grid}')
+    expect(importedSheet?.content).toContain('.extra{display:flex}')
+    expect(site!.runtime?.styles?.[importedSheet!.id]?.enabled).toBe(true)
+  })
+
+  test('import-html upserts linkedCss onto an existing page without replacing the tree', async () => {
+    const db = await createInMemoryTestDb()
+    await saveTestShell(db)
+    const createReq = new Request('http://localhost/admin/api/cms/ladipage/import-html', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        pageId: 'p1',
+        title: 'Existing',
+        html: '<main><h1>Hello</h1></main>',
+      }),
+    })
+    expect((await handleLadipageBridgeRoutes(createReq, db))!.status).toBe(200)
+
+    const rowsBefore = await listDataRows(db, 'pages')
+    const pageBefore = pageFromRow(rowsBefore.find((row) => row.id === 'p1')!)
+    const childCount = pageBefore.nodes[pageBefore.rootNodeId].children.length
+
+    const updateReq = new Request('http://localhost/admin/api/cms/ladipage/import-html', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        pageId: 'p1',
+        html: '<main><h1>Replaced</h1></main>',
+        linkedCss: ':root{--text-color:#393939}body{color:var(--text-color)}',
+        replaceIfEmpty: true,
+      }),
+    })
+    expect((await handleLadipageBridgeRoutes(updateReq, db))!.status).toBe(200)
+
+    const rowsAfter = await listDataRows(db, 'pages')
+    const pageAfter = pageFromRow(rowsAfter.find((row) => row.id === 'p1')!)
+    expect(pageAfter.nodes[pageAfter.rootNodeId].children.length).toBe(childCount)
+
+    const site = await getDraftSite(db)
+    const importedSheet = site!.files.find((file) => file.path === 'imported/ladipage-p1.css')
+    expect(importedSheet?.content).toContain('--text-color:#393939')
+    expect(importedSheet?.content).toContain('body{color:var(--text-color)}')
   })
 
   test('unknown ladipage path is 404 with path', async () => {

@@ -15,8 +15,9 @@
  *
  * Two-part fix implemented here:
  *   1. Copy the tokens the chrome needs from the parent document's :root onto
- *      the iframe's :root at mount time — so `var(--text-subtle)` etc.
- *      resolve correctly inside the chrome CSS.
+ *      chrome-namespaced variables on the iframe's :root — so
+ *      `var(--chrome-text-subtle)` etc. resolve inside the chrome CSS without
+ *      clobbering the site's own `--text` / `--bg-body` tokens.
  *   2. Style editor chrome via STABLE data-attribute selectors
  *      (data-canvas-module-placeholder, data-instatic-slot-instance, etc.) instead
  *      of hashed CSS-Module class names which will never match inside the iframe.
@@ -44,40 +45,31 @@ import { useEffect } from 'react'
 const STYLE_TAG_ID = 'instatic-editor-chrome'
 
 /**
- * Design tokens to forward from the parent document's :root onto the iframe's
- * :root. These are exactly the tokens referenced in CHROME_RULES below.
- * Copying at runtime keeps globals.css as the single source of truth — no
- * duplicated literal values anywhere.
- */
-const CHROME_TOKENS = [
-  '--radius',
-  '--radius-sm',
-  '--text-subtle',
-  '--text-disabled',
-  '--text-muted',
-  '--text',
-  '--text-bright',
-  '--canvas-placeholder-bg',
-  '--bg-surface',
-  '--bg-surface-2',
-  '--bg-surface-3',
-  '--bg-body',
-  '--border-muted',
-  '--border',
-  '--danger',
-] as const
-
-/**
- * Admin typography and spacing tokens, forwarded into the iframe for CHROME
- * elements ONLY.
+ * Admin tokens forwarded into the iframe for CHROME elements ONLY.
  *
  * Read from the parent's admin tokens but WRITTEN under chrome-namespaced
- * variables. Setting `--font-sans` or `--text-s` itself on the iframe `:root`
- * or `--space-s` itself on the iframe `:root` clobbers the SITE's matching
- * Framework tokens — the chrome injector is unlayered, and unlayered always
- * beats the site's tokens in `@layer user-authored`.
+ * variables. Copying `--text` / `--bg-body` onto the iframe `:root` would
+ * clobber the site's matching tokens — the chrome injector is unlayered, and
+ * unlayered always beats the site's tokens in `@layer user-authored`. That
+ * made imported landing copy inherit the editor's light `--text` on a white
+ * page background.
  */
 const CHROME_TOKEN_ALIASES = [
+  ['--radius', '--chrome-radius'],
+  ['--radius-sm', '--chrome-radius-sm'],
+  ['--text-subtle', '--chrome-text-subtle'],
+  ['--text-disabled', '--chrome-text-disabled'],
+  ['--text-muted', '--chrome-text-muted'],
+  ['--text', '--chrome-text'],
+  ['--text-bright', '--chrome-text-bright'],
+  ['--canvas-placeholder-bg', '--chrome-canvas-placeholder-bg'],
+  ['--bg-surface', '--chrome-bg-surface'],
+  ['--bg-surface-2', '--chrome-bg-surface-2'],
+  ['--bg-surface-3', '--chrome-bg-surface-3'],
+  ['--bg-body', '--chrome-bg-body'],
+  ['--border-muted', '--chrome-border-muted'],
+  ['--border', '--chrome-border'],
+  ['--danger', '--chrome-danger'],
   ['--font-sans', '--chrome-font-sans'],
   ['--text-3xs', '--chrome-text-3xs'],
   ['--text-2xs', '--chrome-text-2xs'],
@@ -133,10 +125,7 @@ interface EditorChromeInjectorProps {
  */
 function buildTokenBlock(parentDoc: Document): string {
   const parentStyles = getComputedStyle(parentDoc.documentElement)
-  const declarations = CHROME_TOKENS.flatMap((token) => {
-    const value = parentStyles.getPropertyValue(token).trim()
-    return value ? [`  ${token}: ${value};`] : []
-  })
+  const declarations: string[] = []
   for (const [source, target] of CHROME_TOKEN_ALIASES) {
     const value = parentStyles.getPropertyValue(source).trim()
     if (value) declarations.push(`  ${target}: ${value};`)
@@ -170,9 +159,9 @@ const CHROME_RULES = `
   display: block;
   box-sizing: border-box;
   min-width: 0;
-  border-radius: var(--radius);
-  background: var(--canvas-placeholder-bg);
-  color: var(--text-subtle);
+  border-radius: var(--chrome-radius);
+  background: var(--chrome-canvas-placeholder-bg);
+  color: var(--chrome-text-subtle);
   font-size: var(--chrome-text-s);
   font-family: var(--chrome-font-sans);
   font-weight: 400;
@@ -238,7 +227,7 @@ const CHROME_RULES = `
   flex: 0 0 auto;
   margin: 0;
   padding: 0;
-  color: var(--text-disabled);
+  color: var(--chrome-text-disabled);
   font-size: inherit;
   font-weight: inherit;
   line-height: 1;
@@ -258,7 +247,7 @@ const CHROME_RULES = `
   display: block;
   margin: 0;
   padding: 0;
-  color: var(--text-muted);
+  color: var(--chrome-text-muted);
   font-size: var(--chrome-text-s);
   font-family: var(--chrome-font-sans);
   font-weight: 600;
@@ -278,7 +267,7 @@ const CHROME_RULES = `
   max-width: 36ch;
   margin: 0;
   padding: 0;
-  color: var(--text-subtle);
+  color: var(--chrome-text-subtle);
   font-size: var(--chrome-text-xs);
   font-family: var(--chrome-font-sans);
   font-weight: 500;
@@ -302,10 +291,10 @@ const CHROME_RULES = `
 [data-canvas-module-placeholder] [data-instatic-placeholder-actions] button {
   height: 28px;
   padding: 0 var(--chrome-space-xl);
-  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chrome-text) 14%, transparent);
   border-radius: 999px;
-  background: var(--bg-surface);
-  color: var(--text-bright);
+  background: var(--chrome-bg-surface);
+  color: var(--chrome-text-bright);
   font-size: var(--chrome-text-xs);
   font-family: var(--chrome-font-sans);
   font-weight: 600;
@@ -316,12 +305,12 @@ const CHROME_RULES = `
 }
 
 [data-canvas-module-placeholder] [data-instatic-placeholder-actions] button:hover {
-  background: var(--bg-surface-2);
-  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+  background: var(--chrome-bg-surface-2);
+  border-color: color-mix(in srgb, var(--chrome-text) 22%, transparent);
 }
 
 [data-canvas-module-placeholder] [data-instatic-placeholder-actions] button:active {
-  background: var(--bg-surface-3);
+  background: var(--chrome-bg-surface-3);
 }
 
 /* ── base.slot-instance ─────────────────────────────────────────────────────
@@ -335,12 +324,12 @@ const CHROME_RULES = `
  */
 
 [data-instatic-slot-instance] {
-  border: 1px solid var(--border-muted);
-  border-radius: var(--radius);
-  background: var(--bg-surface);
+  border: 1px solid var(--chrome-border-muted);
+  border-radius: var(--chrome-radius);
+  background: var(--chrome-bg-surface);
   overflow: hidden;
   box-sizing: border-box;
-  color: var(--text-subtle);
+  color: var(--chrome-text-subtle);
   font-size: var(--chrome-text-xs);
   font-family: var(--chrome-font-sans);
   font-weight: 400;
@@ -354,9 +343,9 @@ const CHROME_RULES = `
   align-items: center;
   gap: var(--chrome-space-2xs);
   padding: var(--chrome-space-4xs) var(--chrome-space-s);
-  background: var(--bg-body);
-  border-bottom: 1px dashed var(--border);
-  color: var(--text-subtle);
+  background: var(--chrome-bg-body);
+  border-bottom: 1px dashed var(--chrome-border);
+  color: var(--chrome-text-subtle);
   font-size: var(--chrome-text-xs);
   font-family: var(--chrome-font-sans);
   font-weight: 400;
@@ -371,7 +360,7 @@ const CHROME_RULES = `
 }
 
 [data-instatic-slot-instance-header] [data-instatic-slot-label] {
-  color: var(--text-muted);
+  color: var(--chrome-text-muted);
   font-size: var(--chrome-text-xs);
   font-style: italic;
   font-family: var(--chrome-font-sans);
@@ -393,7 +382,7 @@ const CHROME_RULES = `
  */
 
 [data-instatic-list-placeholder] {
-  color: var(--text-subtle);
+  color: var(--chrome-text-subtle);
   margin-bottom: var(--chrome-space-xs);
   font-family: var(--chrome-font-sans);
   font-weight: initial;
@@ -409,9 +398,9 @@ const CHROME_RULES = `
  */
 
 [data-instatic-unknown-module] {
-  outline: 1px dashed var(--danger);
+  outline: 1px dashed var(--chrome-danger);
   padding: var(--chrome-space-3xs);
-  color: var(--text-subtle);
+  color: var(--chrome-text-subtle);
   font-family: var(--chrome-font-sans);
   font-size: var(--chrome-text-s);
   font-weight: 400;

@@ -221,6 +221,13 @@ async function applyImportedStyles(
   await saveDraftSite(db, nextShell, null)
 }
 
+function mergeImportedCss(...chunks: Array<string | null | undefined>): string {
+  return chunks
+    .map((chunk) => chunk?.trim() ?? '')
+    .filter(Boolean)
+    .join('\n\n')
+}
+
 async function importHtmlIntoPage(
   db: DbClient,
   input: {
@@ -228,6 +235,7 @@ async function importHtmlIntoPage(
     title: string
     slug: string
     html: string
+    linkedCss?: string
   },
 ): Promise<{ importedNodeCount: number }> {
   await ensureServerDomParser()
@@ -262,6 +270,11 @@ async function importHtmlIntoPage(
     { cells: pageToCells(page), slug: page.slug },
     null,
   )
+
+  const rawCss = mergeImportedCss(fragment.styleCss, input.linkedCss)
+  if (rawCss) {
+    await upsertImportedStylesheet(db, input.pageId, rawCss)
+  }
 
   return { importedNodeCount: fragment.rootIds.length }
 }
@@ -501,28 +514,30 @@ export async function handleLadipageBridgeRoutes(
     const empty = isPageTreeEmpty(page)
     const shouldReplace = html.length > 0 && (!body.replaceIfEmpty || empty)
 
+    const linkedCss = body.linkedCss?.trim() ?? ''
     if (shouldReplace) {
       const imported = await importHtmlIntoPage(db, {
         pageId,
         title: body.title?.trim() || page?.title || pageId,
         slug: page?.slug || uniqueSlug(slugBase(body.title || pageId), rows),
         html,
+        linkedCss,
       })
       importedNodeCount = imported.importedNodeCount
-    } else if (page && body.assetOrigin) {
-      if (rewritePageMediaUrls(page, body.assetOrigin)) {
-        await saveDataRowDraft(
-          db,
-          page.id,
-          { cells: pageToCells(page), slug: page.slug },
-          null,
-        )
+    } else {
+      if (page && body.assetOrigin) {
+        if (rewritePageMediaUrls(page, body.assetOrigin)) {
+          await saveDataRowDraft(
+            db,
+            page.id,
+            { cells: pageToCells(page), slug: page.slug },
+            null,
+          )
+        }
       }
-    }
-
-    const linkedCss = body.linkedCss?.trim() ?? ''
-    if (linkedCss) {
-      await upsertImportedStylesheet(db, pageId, linkedCss)
+      if (linkedCss) {
+        await upsertImportedStylesheet(db, pageId, linkedCss)
+      }
     }
 
     return jsonResponse({
