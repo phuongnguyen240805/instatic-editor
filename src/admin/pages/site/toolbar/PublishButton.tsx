@@ -126,6 +126,12 @@ export function PublishButton({ enabled = true, onSave, saveStatus }: PublishBut
       // which is why the server gates it behind a fresh step-up window
       // in addition to the `pages.publish` capability check.
       const result = await runStepUp(() => publishCmsDraft())
+      if (result.ladipage && result.ladipage.ok === false) {
+        setState('error')
+        setMessage(result.ladipage.error || 'LadiPage sync failed')
+        resetErrorLater()
+        return
+      }
       setState('published')
       setMessage(
         result.publishedPages === 1

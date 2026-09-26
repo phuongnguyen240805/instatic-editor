@@ -6,7 +6,8 @@
  *   LADIPAGE_BFF_BASE              e.g. http://host.docker.internal:7002
  *   LADIPAGE_BRIDGE_HMAC_SECRET    must match Nest LADIPAGE_BRIDGE_HMAC_SECRET
  *
- * Silent no-op when env or page binding is missing.
+ * Missing env or page binding is an error — the editor must not report
+ * "Published" when LadiPage never received HTML.
  */
 import { createHmac } from 'node:crypto'
 import type { DbClient } from '../../db/client'
@@ -16,12 +17,9 @@ import {
   getDraftSiteDocument,
   getLatestPublishedSiteSnapshot,
   getPublishedPageSnapshotById,
-  type PublishedPageSnapshot,
 } from '../../repositories/publish'
 import type { RendererOutput } from '../../publish/publicRenderer'
-import { renderPublishedSnapshot } from '../../publish/publicRenderer'
 import { applyPublishedHtmlPipeline } from '../../publish/publishedHtmlPipeline'
-import { readArtefact } from '../../publish/staticArtefact'
 import { getLadipageSsoBinding } from './ladipageSso'
 
 function bridgeBase(): string {
@@ -51,6 +49,30 @@ const EMPTY_CSS_BUNDLE: SiteCssBundle = {
   userStyles: { bundle: 'userStyles', filename: '', hash: '', content: '' },
 }
 
+function ladipageIdFromExternal(externalPageId: string): string | null {
+  if (!externalPageId.startsWith('page_')) return null
+  const rest = externalPageId.slice('page_'.length).trim()
+  return rest || null
+}
+
+function absolutizeInstaticUrls(html: string): string {
+  const origin = (
+    process.env.PUBLIC_ORIGIN ||
+    process.env.LADIPAGE_PUBLIC_ORIGIN ||
+    ''
+  )
+    .split(',')[0]
+    ?.trim()
+    .replace(/\/$/, '')
+  if (!origin) return html
+  return html
+    .replace(/(\s(?:src|href)=["'])\/(?!\/)/gi, `$1${origin}/`)
+    .replace(
+      /url\(\s*(['"]?)\/(?!\/)/gi,
+      (_match, quote: string) => `url(${quote}${origin}/`,
+    )
+}
+
 async function postBridgeJson(
   path: string,
   body: Record<string, unknown>,
@@ -58,7 +80,10 @@ async function postBridgeJson(
   const base = bridgeBase()
   const secret = bridgeSecret()
   if (!base || !secret) {
-    return { ok: true }
+    return {
+      ok: false,
+      error: 'LADIPAGE_BFF_BASE / LADIPAGE_BRIDGE_HMAC_SECRET not set',
+    }
   }
 
   const rawBody = JSON.stringify(body)
@@ -89,48 +114,42 @@ async function postBridgeJson(
   }
 }
 
-async function resolvePublishedHtml(
+async function resolveInlinePageHtml(
   db: DbClient,
-  uploadsDir: string | undefined,
   targetPageId?: string | null,
 ): Promise<{ html: string; title: string; externalPageId: string } | null> {
-  const renderSnapshot = async (
-    snap: PublishedPageSnapshot,
-  ): Promise<{ html: string; title: string; externalPageId: string } | null> => {
-    try {
-      const page = snap.site.pages.find((p) => p.id === snap.pageRowId)
-      const slug = page?.slug || 'index'
-      const urlPath = slug === 'index' ? '/' : `/${slug}`
-      if (uploadsDir) {
-        const diskHtml = await readArtefact(uploadsDir, urlPath)
-        if (diskHtml?.trim()) {
-          return {
-            html: diskHtml,
-            title: page?.title || slug,
-            externalPageId: snap.pageRowId,
-          }
-        }
-      }
-      const syntheticUrl = new URL(`http://localhost${urlPath}`)
-      const rendered = await renderPublishedSnapshot(snap, { db, url: syntheticUrl })
-      const html = await applyPublishedHtmlPipeline(rendered, db)
-      return {
-        html,
-        title: page?.title || slug,
-        externalPageId: snap.pageRowId,
-      }
-    } catch {
-      return null
-    }
-  }
-
   if (targetPageId) {
-    const snap = await getPublishedPageSnapshotById(db, targetPageId)
-    return snap ? renderSnapshot(snap) : null
+    const published = await resolveDraftHtml(db, targetPageId)
+    if (published) return published
   }
 
-  const snap = await getLatestPublishedSiteSnapshot(db)
-  return snap ? renderSnapshot(snap) : null
+  const snap = targetPageId
+    ? await getPublishedPageSnapshotById(db, targetPageId)
+    : await getLatestPublishedSiteSnapshot(db)
+  if (!snap) return resolveDraftHtml(db, targetPageId)
+
+  const page = snap.site.pages.find((candidate) => candidate.id === snap.pageRowId)
+  if (!page) return null
+  try {
+    const published = publishPage(page, snap.site, registry, { cssEmission: 'inline' })
+    const rendered: RendererOutput = {
+      html: published.html,
+      pageId: page.id,
+      slug: page.slug,
+      siteId: snap.site.id,
+      jsModuleIds: published.jsModuleIds,
+      publishVersion: 0,
+      cssBundle: EMPTY_CSS_BUNDLE,
+    }
+    const html = await applyPublishedHtmlPipeline(rendered, db)
+    return {
+      html: absolutizeInstaticUrls(html),
+      title: page.title || page.slug || page.id,
+      externalPageId: page.id,
+    }
+  } catch {
+    return resolveDraftHtml(db, targetPageId)
+  }
 }
 
 async function resolveDraftHtml(
@@ -156,7 +175,7 @@ async function resolveDraftHtml(
     }
     const html = await applyPublishedHtmlPipeline(rendered, db)
     return {
-      html,
+      html: absolutizeInstaticUrls(html),
       title: page.title || page.slug || page.id,
       externalPageId: page.id,
     }
@@ -173,25 +192,25 @@ export async function notifyLadipagePublishIntent(input: {
   userId: string
   uploadsDir?: string
 }): Promise<{ ok: boolean; skipped?: string; error?: string }> {
-  const base = bridgeBase()
-  const secret = bridgeSecret()
-  if (!base || !secret) {
-    return { ok: true, skipped: 'LADIPAGE_BFF_BASE / LADIPAGE_BRIDGE_HMAC_SECRET not set' }
-  }
-
   const binding = getLadipageSsoBinding(input.userId)
-  if (!binding?.ladipagePageId) {
-    return { ok: true, skipped: 'no Ladipage page binding from SSO' }
-  }
-
-  const published = await resolvePublishedHtml(input.db, input.uploadsDir, binding.instaticPageId)
+  const targetPageId = binding?.instaticPageId ?? null
+  const published = await resolveInlinePageHtml(input.db, targetPageId)
   if (!published?.html) {
     return { ok: false, error: 'no published HTML to send' }
   }
 
+  const externalPageId = binding?.instaticPageId || published.externalPageId
+  const pageId =
+    binding?.ladipagePageId ||
+    ladipageIdFromExternal(externalPageId) ||
+    ''
+  if (!pageId) {
+    return { ok: false, error: 'no Ladipage page id (SSO binding missing)' }
+  }
+
   const result = await postBridgeJson('/api/internal/landing/publish-intent', {
-    pageId: binding.ladipagePageId,
-    externalPageId: binding.instaticPageId || published.externalPageId,
+    pageId,
+    externalPageId,
     html: published.html,
     seoTitle: published.title,
   })
@@ -202,25 +221,25 @@ export async function notifyLadipageDraftSaved(input: {
   db: DbClient
   userId: string
 }): Promise<{ ok: boolean; skipped?: string; error?: string }> {
-  const base = bridgeBase()
-  const secret = bridgeSecret()
-  if (!base || !secret) {
-    return { ok: true, skipped: 'LADIPAGE_BFF_BASE / LADIPAGE_BRIDGE_HMAC_SECRET not set' }
-  }
-
   const binding = getLadipageSsoBinding(input.userId)
-  if (!binding?.ladipagePageId || !binding.instaticPageId) {
-    return { ok: true, skipped: 'no Ladipage page binding from SSO' }
-  }
-
-  const draft = await resolveDraftHtml(input.db, binding.instaticPageId)
+  const targetPageId = binding?.instaticPageId ?? null
+  const draft = await resolveDraftHtml(input.db, targetPageId)
   if (!draft?.html) {
     return { ok: false, error: 'no draft HTML to send' }
   }
 
+  const externalPageId = binding?.instaticPageId || draft.externalPageId
+  const pageId =
+    binding?.ladipagePageId ||
+    ladipageIdFromExternal(externalPageId) ||
+    ''
+  if (!pageId) {
+    return { ok: false, error: 'no Ladipage page id (SSO binding missing)' }
+  }
+
   const result = await postBridgeJson('/api/internal/landing/draft-saved', {
-    pageId: binding.ladipagePageId,
-    externalPageId: binding.instaticPageId || draft.externalPageId,
+    pageId,
+    externalPageId,
     html: draft.html,
     seoTitle: draft.title,
   })

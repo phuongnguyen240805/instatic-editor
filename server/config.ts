@@ -67,7 +67,10 @@ function normalizeOrigins(raw: readonly string[]): string[] {
  *      inbound `Host` header.
  */
 export function resolvePublicOrigins(env: Record<string, string | undefined>): string[] {
-  const explicit = readCsvList(env.PUBLIC_ORIGIN)
+  const explicit = [
+    ...readCsvList(env.PUBLIC_ORIGIN),
+    ...readCsvList(env.LADIPAGE_PUBLIC_ORIGIN),
+  ]
   if (explicit.length > 0) {
     return normalizeOrigins(explicit)
   }

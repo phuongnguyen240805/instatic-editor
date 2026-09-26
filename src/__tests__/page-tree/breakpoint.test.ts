@@ -15,6 +15,19 @@ describe('parseBreakpoint', () => {
     expect(breakpointMediaQuery(breakpoint!)).toBe('(max-width: 768px)')
   })
 
+  it('migrates stored desktop max-width:1440 to min-width:769', () => {
+    const breakpoint = parseBreakpoint({
+      id: 'desktop',
+      label: 'Desktop',
+      width: 1440,
+      icon: 'monitor',
+      mediaQuery: '(max-width: 1440px)',
+    })
+
+    expect(breakpoint).not.toBeNull()
+    expect(breakpoint!.mediaQuery).toBe('(min-width: 769px)')
+  })
+
   it('preserves an explicit mobile-first media query', () => {
     const breakpoint = parseBreakpoint({
       id: 'tablet',

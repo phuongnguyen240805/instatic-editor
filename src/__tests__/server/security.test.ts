@@ -211,6 +211,28 @@ describe('originAllowed', () => {
     })
     expect(originAllowed(req)).toBe(true)
   })
+
+  it('allows https Origin when Host is the same host behind a TLS terminator', () => {
+    const req = makeReq('http://0.0.0.0:3001/admin/api/cms/site-document', {
+      method: 'PUT',
+      headers: {
+        host: 'instatic-app.example.sslip.io',
+        origin: 'https://instatic-app.example.sslip.io',
+      },
+    })
+    expect(originAllowed(req)).toBe(true)
+  })
+
+  it('still rejects a foreign Origin even if Host is the CMS host', () => {
+    const req = makeReq('http://0.0.0.0:3001/admin/api/cms/site-document', {
+      method: 'PUT',
+      headers: {
+        host: 'instatic-app.example.sslip.io',
+        origin: 'https://evil.example.com',
+      },
+    })
+    expect(originAllowed(req)).toBe(false)
+  })
 })
 
 describe('clientIp', () => {

@@ -110,7 +110,22 @@ export function mergeImportedStyleRules(
   const now = Date.now()
   for (const rule of rules) {
     if (rule.kind === 'class') {
-      if (byName.has(rule.name)) continue // existing class wins
+      const existingId = byName.get(rule.name)
+      if (existingId) {
+        const existing = siteRules[existingId]
+        if (!existing) continue
+        const empty =
+          Object.keys(existing.styles ?? {}).length === 0 &&
+          Object.keys(existing.contextStyles ?? {}).length === 0
+        if (!empty) continue
+        siteRules[existingId] = {
+          ...existing,
+          styles: rule.styles,
+          contextStyles: rule.contextStyles,
+          updatedAt: now,
+        }
+        continue
+      }
     } else if (ambientSelectors.has(rule.selector)) {
       continue // identical ambient selector already present
     }

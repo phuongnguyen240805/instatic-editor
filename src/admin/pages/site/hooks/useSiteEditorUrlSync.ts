@@ -27,6 +27,7 @@
 import { useEffect, useRef } from 'react'
 import { isHomePage } from '@core/page-tree'
 import { useInitialQueryParams, useUrlQuerySync } from '@admin/lib/urlState'
+import { useAdminUi } from '@admin/state/adminUi'
 import { useEditorStore } from '@site/store/store'
 
 interface UseSiteEditorUrlSyncOptions {
@@ -50,6 +51,11 @@ export function useSiteEditorUrlSync({ enabled, loaded }: UseSiteEditorUrlSyncOp
     const site = store.site
     if (!site) return
     appliedRef.current = true
+
+    const lpUrl = initialParams.get('lpUrl')
+    if (lpUrl && /^https?:\/\//i.test(lpUrl)) {
+      useAdminUi.getState().setLadipagePublicUrl(lpUrl)
+    }
 
     // Data-workspace deep link (`?table=…&row=…`) takes precedence — it carries
     // explicit row ids and can also target a visual component.

@@ -53,7 +53,7 @@ export type Breakpoint = Static<typeof BreakpointSchema>
 export const DEFAULT_BREAKPOINTS: Breakpoint[] = [
   { id: 'mobile',  label: 'Mobile',  width: 375,  mediaQuery: '(max-width: 375px)',  icon: 'smartphone' },
   { id: 'tablet',  label: 'Tablet',  width: 768,  mediaQuery: '(max-width: 768px)',  icon: 'tablet'     },
-  { id: 'desktop', label: 'Desktop', width: 1440, mediaQuery: '(max-width: 1440px)', icon: 'monitor'    },
+  { id: 'desktop', label: 'Desktop', width: 1440, mediaQuery: '(min-width: 769px)',  icon: 'monitor'    },
 ]
 
 // ---------------------------------------------------------------------------
@@ -76,9 +76,14 @@ export function parseBreakpoint(raw: unknown): Breakpoint | null {
   if (typeof r.id !== 'string') return null
   if (typeof r.label !== 'string') return null
   if (typeof r.width !== 'number') return null
-  const mediaQuery = typeof r.mediaQuery === 'string' && r.mediaQuery.trim().length > 0
+  let mediaQuery = typeof r.mediaQuery === 'string' && r.mediaQuery.trim().length > 0
     ? r.mediaQuery.trim()
     : defaultBreakpointMediaQuery(r.width)
+  // Stored default used max-width:1440 which matched the 1440px canvas frame
+  // but dropped desktop styles on public viewports wider than 1440px.
+  if (r.id === 'desktop' && mediaQuery === '(max-width: 1440px)') {
+    mediaQuery = '(min-width: 769px)'
+  }
   return {
     id: r.id,
     label: r.label,

@@ -34,8 +34,9 @@ import { useAdminUi } from '@admin/state/adminUi'
 
 export function OpenLivePageButton() {
   const activeLivePath = useAdminUi((s) => s.activeLivePath)
-  const target = activeLivePath ?? '/'
-  const tooltip = activeLivePath ? 'Open live page' : 'Open live site'
+  const ladipagePublicUrl = useAdminUi((s) => s.ladipagePublicUrl)
+  const target = ladipagePublicUrl || activeLivePath || '/'
+  const tooltip = ladipagePublicUrl || activeLivePath ? 'Open live page' : 'Open live site'
 
   return (
     <Button

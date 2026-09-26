@@ -44,6 +44,7 @@ export type LadipageSsoBinding = {
   ladipagePageId: string
   instaticPageId: string | null
   siteId: string | null
+  publicUrl: string | null
   at: number
 }
 
@@ -67,6 +68,7 @@ export function rememberLadipageSsoBinding(
     instaticPageId:
       typeof claims.instaticPageId === 'string' ? claims.instaticPageId : null,
     siteId: typeof claims.siteId === 'string' ? claims.siteId : null,
+    publicUrl: typeof claims.publicUrl === 'string' ? claims.publicUrl : null,
     at: Date.now(),
   })
 }
@@ -120,10 +122,32 @@ function ssoSecret(): string {
   )
 }
 
-function redirectTo(path: string): Response {
+function ssoRedirectLocation(req: Request, path: string): string {
+  if (!path.startsWith('/')) return path
+  const configured = (process.env.PUBLIC_ORIGIN ?? '')
+    .split(',')[0]
+    ?.trim()
+    .replace(/\/$/, '')
+  if (configured) return `${configured}${path}`
+  const host = req.headers.get('host')
+  if (!host) return path
+  const forwarded = req.headers.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  const proto =
+    forwarded === 'https' || forwarded === 'http'
+      ? forwarded
+      : req.url.startsWith('https:')
+        ? 'https'
+        : 'http'
+  return `${proto}://${host}${path}`
+}
+
+function redirectTo(req: Request, path: string): Response {
   return new Response(null, {
     status: 302,
-    headers: { Location: path },
+    headers: {
+      Location: ssoRedirectLocation(req, path),
+      'Cache-Control': 'no-store, no-cache, max-age=0',
+    },
   })
 }
 
@@ -131,6 +155,7 @@ function ssoTargetFromClaims(claims: Record<string, unknown>): {
   ladipagePageId: string
   instaticPageId: string
   siteId: string | null
+  publicUrl: string | null
   redirectPath: string
 } {
   const ladipagePageId =
@@ -146,10 +171,19 @@ function ssoTargetFromClaims(claims: Record<string, unknown>): {
     typeof claims.siteId === 'string' && claims.siteId.trim()
       ? claims.siteId.trim()
       : null
-  const redirectPath = instaticPageId
-    ? `/admin/site?table=pages&row=${encodeURIComponent(instaticPageId)}`
-    : '/admin/site'
-  return { ladipagePageId, instaticPageId, siteId, redirectPath }
+  const publicUrl =
+    typeof claims.publicUrl === 'string' && claims.publicUrl.trim()
+      ? claims.publicUrl.trim()
+      : null
+  const params = new URLSearchParams()
+  if (instaticPageId) {
+    params.set('table', 'pages')
+    params.set('row', instaticPageId)
+  }
+  if (publicUrl) params.set('lpUrl', publicUrl)
+  const query = params.toString()
+  const redirectPath = query ? `/admin/site?${query}` : '/admin/site'
+  return { ladipagePageId, instaticPageId, siteId, publicUrl, redirectPath }
 }
 
 async function resolveActiveOwnerId(db: DbClient): Promise<string | null> {
@@ -263,11 +297,10 @@ export async function handleLadipageSso(req: Request, db: DbClient): Promise<Res
   const jti = typeof verified.claims.jti === 'string' ? verified.claims.jti : ''
   if (jti) {
     pruneJti()
-    if (usedJti.has(jti)) {
-      // Double navigation: first request already set cookie and bootstrapped
-      // the target page. Keep the editor focused on the same row.
-      return redirectTo(target.redirectPath)
-    }
+    // Prefetch / double navigation often consumes jti on a request that
+    // never stores Set-Cookie. Always mint a session cookie while the
+    // ticket is still valid (120s) so the editor does not fall through
+    // to the Instatic password form.
     usedJti.set(jti, Date.now() + JTI_TTL_MS)
   }
 
@@ -292,7 +325,11 @@ export async function handleLadipageSso(req: Request, db: DbClient): Promise<Res
       })
       verified.claims.instaticPageId = ensured.pageId
       if (target.siteId) verified.claims.siteId = ensured.siteId
-      redirectPath = `/admin/site?table=pages&row=${encodeURIComponent(ensured.pageId)}`
+      const params = new URLSearchParams()
+      params.set('table', 'pages')
+      params.set('row', ensured.pageId)
+      if (target.publicUrl) params.set('lpUrl', target.publicUrl)
+      redirectPath = `/admin/site?${params.toString()}`
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return jsonResponse(
@@ -329,6 +366,6 @@ export async function handleLadipageSso(req: Request, db: DbClient): Promise<Res
     ...requestAuditContext(req),
   })
 
-  const res = redirectTo(redirectPath)
+  const res = redirectTo(req, redirectPath)
   return setCookieHeader(res, sessionCookie(req, sessionToken, expiresAt))
 }

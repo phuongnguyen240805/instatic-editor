@@ -53,7 +53,7 @@ import { normalizeOrigin } from '../config'
  * CMS request Host is the internal Bun port (8787). Without these entries
  * every save/publish PUT/POST dies with `Forbidden: invalid origin`.
  */
-export const DEV_ORIGIN_ALLOWLIST: string[] = [
+const STATIC_DEV_ORIGINS: string[] = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:5174',
@@ -63,9 +63,25 @@ export const DEV_ORIGIN_ALLOWLIST: string[] = [
   'http://127.0.0.1:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3001',
-  process.env.VITE_ALLOWED_ORIGIN ?? '',
-  process.env.LADIPAGE_PUBLIC_ORIGIN ?? '',
-].filter(Boolean)
+]
+
+/**
+ * Extra origins allowed by the Origin check.
+ * Env entries are read per-request so Dokploy/dotenv values set after import
+ * still apply (`LADIPAGE_PUBLIC_ORIGIN` used to be captured once at boot).
+ */
+export function devOriginAllowlist(): string[] {
+  const fromEnv = [
+    process.env.VITE_ALLOWED_ORIGIN ?? '',
+    ...(process.env.LADIPAGE_PUBLIC_ORIGIN ?? '').split(','),
+  ]
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  return [...STATIC_DEV_ORIGINS, ...fromEnv]
+}
+
+/** Static localhost list (tests). Runtime CSRF uses `devOriginAllowlist()`. */
+export const DEV_ORIGIN_ALLOWLIST: string[] = STATIC_DEV_ORIGINS
 
 /** Methods that mutate server state — the only ones the Origin check applies to. */
 export function isStateChangingMethod(method: string): boolean {
@@ -136,7 +152,31 @@ export function originAllowed(req: Request): boolean {
   if (!origin) return false
   if (origin === normalizeOrigin(expectedOrigin(req))) return true
   if (publicOrigins.includes(origin)) return true
-  return DEV_ORIGIN_ALLOWLIST.some((dev) => normalizeOrigin(dev) === origin)
+  // Dokploy/Caddy terminates TLS: browser Origin is https://host while
+  // Bun sees http://host. Same hostname as the inbound Host header is
+  // still first-party — not a cross-site CSRF.
+  if (originMatchesRequestHost(req, origin)) return true
+  return devOriginAllowlist().some((dev) => normalizeOrigin(dev) === origin)
+}
+
+/** True when a browser Origin is on PUBLIC_ORIGIN / LADIPAGE_PUBLIC_ORIGIN / dev list. */
+export function isTrustedBrowserOrigin(origin: string): boolean {
+  const normalized = normalizeOrigin(origin)
+  if (!normalized) return false
+  if (publicOrigins.includes(normalized)) return true
+  return devOriginAllowlist().some((dev) => normalizeOrigin(dev) === normalized)
+}
+
+function originMatchesRequestHost(req: Request, origin: string): boolean {
+  const hostHeader = req.headers.get('host')
+  if (!hostHeader) return false
+  try {
+    const originHost = new URL(origin).hostname.toLowerCase()
+    const requestHost = new URL(`http://${hostHeader}`).hostname.toLowerCase()
+    return originHost === requestHost
+  } catch {
+    return false
+  }
 }
 
 /**

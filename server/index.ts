@@ -2,7 +2,7 @@ import { createDbClient } from './db'
 import { runMigrations } from './db/runMigrations'
 import { syncSystemRoles } from './repositories/roles'
 import { readServerConfig } from './config'
-import { DEV_ORIGIN_ALLOWLIST, configurePublicOrigins, configureTrustedProxyCidrs, stampSocketIp } from './auth/security'
+import { isTrustedBrowserOrigin, configurePublicOrigins, configureTrustedProxyCidrs, stampSocketIp } from './auth/security'
 import { applySecurityHeaders } from './securityHeaders'
 import { startConversationPurgeTick } from './ai/boot'
 
@@ -45,7 +45,7 @@ startConversationPurgeTick(db)
  * `VITE_ALLOWED_ORIGIN` values silently open the API up.
  */
 function corsHeaders(origin: string | null): Record<string, string> {
-  if (!origin || !DEV_ORIGIN_ALLOWLIST.includes(origin)) return {}
+  if (!origin || !isTrustedBrowserOrigin(origin)) return {}
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Credentials': 'true',

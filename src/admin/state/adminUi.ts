@@ -90,6 +90,13 @@ interface AdminUiState {
    */
   activeLivePath: string | null
   setActiveLivePath: (path: string | null) => void
+
+  /**
+   * Absolute LadiPage public URL (`https://…/p/{slug}`) from SSO `lpUrl`.
+   * Open-live prefers this over Instatic's own public path.
+   */
+  ladipagePublicUrl: string | null
+  setLadipagePublicUrl: (url: string | null) => void
 }
 
 /**
@@ -152,4 +159,7 @@ export const useAdminUi = create<AdminUiState>((set) => ({
 
   activeLivePath: null,
   setActiveLivePath: (path) => set({ activeLivePath: path }),
+
+  ladipagePublicUrl: null,
+  setLadipagePublicUrl: (url) => set({ ladipagePublicUrl: url }),
 }))

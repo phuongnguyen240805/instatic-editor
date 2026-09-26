@@ -594,7 +594,11 @@ export const IframeFrameSurface = forwardRef<IframeFrameSurfaceHandle, IframeFra
     // breakpoint width (the iframe's real width); height is a fixed
     // device-like value. Pinning `vh`/`vmax`/… to this stops authored
     // viewport units from feeding the grow-to-content height loop above.
-    const viewport: CanvasViewport = { width, height: CANVAS_VIEWPORT_HEIGHT }
+    // Design frames pin vh to 800px to break the grow-to-content loop.
+    // Live frames match public: real iframe viewport, no unit rewrite.
+    const viewport: CanvasViewport | undefined = isLive
+      ? undefined
+      : { width, height: CANVAS_VIEWPORT_HEIGHT }
 
     return (
       <>

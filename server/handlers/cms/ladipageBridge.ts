@@ -119,7 +119,22 @@ function mergeImportedStyleRules(
   const now = Date.now()
   for (const rule of rules) {
     if (rule.kind === 'class') {
-      if (byName.has(rule.name)) continue
+      const existingId = byName.get(rule.name)
+      if (existingId) {
+        const existing = siteRules[existingId]
+        if (!existing) continue
+        const empty =
+          Object.keys(existing.styles ?? {}).length === 0 &&
+          Object.keys(existing.contextStyles ?? {}).length === 0
+        if (!empty) continue
+        siteRules[existingId] = {
+          ...existing,
+          styles: rule.styles,
+          contextStyles: rule.contextStyles,
+          updatedAt: now,
+        }
+        continue
+      }
     } else if (ambientSelectors.has(rule.selector)) {
       continue
     }
@@ -326,31 +341,71 @@ async function buildArtifactHtml(
     /* disk may fail in tests */
   }
 
-  // 3) Draft page row (pre-publish)
-  try {
-    const rows = await listDataRows(db, 'pages')
-    const match =
-      rows.find((r) => r.id === pageId) ||
-      rows.find((r) => r.slug === pageId)
-    if (match) {
-      const page = pageFromRow(match)
-      const title = page.title || match.slug || pageId
-      const html = [
-        '<!DOCTYPE html><html><head><meta charset="utf-8">',
-        `<title>${escapeHtml(title)}</title></head>`,
-        `<body data-lp-page="${escapeHtml(pageId)}" data-instatic-draft="1">`,
-        `<main><h1>${escapeHtml(title)}</h1>`,
-        '<p>Draft page (publish in Instatic to bake full HTML).</p></main>',
-        '</body></html>',
-      ].join('')
-      return { html, title, etag: `draft-${match.id}` }
-    }
-  } catch {
-    /* ignore */
-  }
-
   void siteIdHint
   return null
+}
+
+function isPageTreeEmpty(page: Page | null): boolean {
+  if (!page?.rootNodeId) return true
+  const root = page.nodes[page.rootNodeId]
+  if (!root) return true
+  return !Array.isArray(root.children) || root.children.length === 0
+}
+
+const ABSOLUTE_OR_SPECIAL = /^(?:https?:|data:|blob:|\/\/|#|mailto:|tel:)/i
+
+function rewriteAssetUrl(raw: string, origin: string): string {
+  const src = raw.trim()
+  if (!src || ABSOLUTE_OR_SPECIAL.test(src)) return src
+  const base = inferRelativeAssetBase(src, origin)
+  if (src.startsWith('/')) return `${origin}${src}`
+  try {
+    return new URL(src, base).href
+  } catch {
+    return src
+  }
+}
+
+function inferRelativeAssetBase(src: string, origin: string): string {
+  const fromSrc = src.match(/\/templates\/[A-Za-z0-9._\-]+(?:\/[A-Za-z0-9._\-]+)+\//)
+  if (fromSrc) {
+    return src.startsWith('http') ? src.slice(0, src.indexOf(fromSrc[0]) + fromSrc[0].length) : `${origin}${fromSrc[0]}`
+  }
+  if (
+    src.includes('assets/img/') ||
+    /^(?:plate\d+|home|about|app\d+|movil-app)\.(?:png|jpe?g|webp)$/i.test(src)
+  ) {
+    return `${origin}/templates/bedimcode/responsive-website-restaurant/`
+  }
+  return `${origin}/`
+}
+
+function rewritePageMediaUrls(page: Page, originRaw: string): boolean {
+  const origin = originRaw.trim().replace(/\/$/, '')
+  if (!origin) return false
+  let changed = false
+  for (const node of Object.values(page.nodes)) {
+    if (node.moduleId === 'base.image' && typeof node.props?.src === 'string') {
+      const next = rewriteAssetUrl(node.props.src, origin)
+      if (next !== node.props.src) {
+        node.props.src = next
+        changed = true
+      }
+    }
+    if (!node.inlineStyles) continue
+    for (const [key, value] of Object.entries(node.inlineStyles)) {
+      if (typeof value !== 'string' || !value.includes('url(')) continue
+      const next = value.replace(
+        /url\(\s*(['"]?)([^)"']+)\1\s*\)/gi,
+        (_m, quote: string, url: string) => `url(${quote}${rewriteAssetUrl(url, origin)}${quote})`,
+      )
+      if (next !== value) {
+        node.inlineStyles[key] = next
+        changed = true
+      }
+    }
+  }
+  return changed
 }
 
 function escapeHtml(s: string): string {
@@ -396,6 +451,8 @@ export async function handleLadipageBridgeRoutes(
       pageId: Type.Optional(Type.String()),
       html: Type.Optional(Type.String()),
       title: Type.Optional(Type.String()),
+      replaceIfEmpty: Type.Optional(Type.Boolean()),
+      assetOrigin: Type.Optional(Type.String()),
     })
     const body = await readValidatedBody(req, ImportSchema)
     if (!body) return badRequest('Invalid body')
@@ -409,8 +466,10 @@ export async function handleLadipageBridgeRoutes(
     const page = row ? pageFromRow(row) : null
     const html = body.html?.trim() ?? ''
     let importedNodeCount = 0
+    const empty = isPageTreeEmpty(page)
+    const shouldReplace = html.length > 0 && (!body.replaceIfEmpty || empty)
 
-    if (html) {
+    if (shouldReplace) {
       const imported = await importHtmlIntoPage(db, {
         pageId,
         title: body.title?.trim() || page?.title || pageId,
@@ -418,6 +477,15 @@ export async function handleLadipageBridgeRoutes(
         html,
       })
       importedNodeCount = imported.importedNodeCount
+    } else if (page && body.assetOrigin) {
+      if (rewritePageMediaUrls(page, body.assetOrigin)) {
+        await saveDataRowDraft(
+          db,
+          page.id,
+          { cells: pageToCells(page), slug: page.slug },
+          null,
+        )
+      }
     }
 
     return jsonResponse({
@@ -439,14 +507,10 @@ export async function handleLadipageBridgeRoutes(
     const siteId = url.searchParams.get('siteId')
     const artifact = await buildArtifactHtml(db, pageId, siteId)
     if (!artifact) {
-      const title = pageId
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body data-lp-page="${escapeHtml(pageId)}"><main><h1>${escapeHtml(title)}</h1><p>No published artifact yet. Save + Publish in the editor first.</p></main></body></html>`
-      return jsonResponse({
-        html,
-        title,
-        description: '',
-        etag: `empty-${pageId}`,
-      })
+      return jsonResponse(
+        { error: 'No published artifact', pageId },
+        { status: 404 },
+      )
     }
     return jsonResponse({
       html: artifact.html,

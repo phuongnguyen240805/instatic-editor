@@ -167,6 +167,11 @@ export const CmsMediaFolderEnvelopeSchema = Type.Object({
 
 export const CmsPublishResultSchema = Type.Object({
   publishedPages: Type.Number(),
+  ladipage: Type.Optional(Type.Object({
+    ok: Type.Boolean(),
+    skipped: Type.Optional(Type.String()),
+    error: Type.Optional(Type.String()),
+  })),
 })
 
 export type CmsPublishResult = Static<typeof CmsPublishResultSchema>

@@ -85,7 +85,7 @@ describe('verifyLadipageSsoToken', () => {
 
       expect(res).not.toBeNull()
       expect(res!.status).toBe(302)
-      expect(res!.headers.get('location')).toBe('/admin/site?table=pages&row=page_lp_a')
+      expect(res!.headers.get('location')).toContain('/admin/site?table=pages&row=page_lp_a')
       expect(res!.headers.get('set-cookie')).toContain(`${SESSION_COOKIE_NAME}=`)
 
       const rows = await listDataRows(db, 'pages')
@@ -117,8 +117,9 @@ describe('verifyLadipageSsoToken', () => {
 
       expect(first!.status).toBe(302)
       expect(second!.status).toBe(302)
-      expect(first!.headers.get('location')).toBe('/admin/site?table=pages&row=page_lp_b')
-      expect(second!.headers.get('location')).toBe('/admin/site?table=pages&row=page_lp_b')
+      expect(first!.headers.get('location')).toContain('/admin/site?table=pages&row=page_lp_b')
+      expect(second!.headers.get('location')).toContain('/admin/site?table=pages&row=page_lp_b')
+      expect(second!.headers.get('set-cookie')).toContain(`${SESSION_COOKIE_NAME}=`)
     } finally {
       if (previousSecret == null) {
         delete process.env.INSTATIC_SSO_SECRET

@@ -75,6 +75,15 @@ describe('resolvePublicOrigins', () => {
     ).toEqual(['https://app.onrender.com', 'https://app.up.railway.app'])
   })
 
+  it('merges LADIPAGE_PUBLIC_ORIGIN with PUBLIC_ORIGIN', () => {
+    expect(
+      resolvePublicOrigins({
+        PUBLIC_ORIGIN: 'https://instatic.example',
+        LADIPAGE_PUBLIC_ORIGIN: 'https://ladipage.example, https://instatic.example/',
+      }),
+    ).toEqual(['https://instatic.example', 'https://ladipage.example'])
+  })
+
   it('lets PUBLIC_ORIGIN win over platform vars', () => {
     expect(
       resolvePublicOrigins({
