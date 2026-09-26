@@ -358,7 +358,15 @@ async function upsertImportedStylesheet(
   const files = Array.isArray(shell.files) ? [...shell.files] : []
   const existing = files.find((file) => file.path === path)
   const id = existing?.id ?? nanoid()
-  const nextFile = { id, path, type: 'style' as const, content: css }
+  const now = Date.now()
+  const nextFile = {
+    id,
+    path,
+    type: 'style' as const,
+    content: css,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  }
   const nextFiles = [...files.filter((file) => file.id !== id && file.path !== path), nextFile]
   const runtime = shell.runtime ?? DEFAULT_SITE_RUNTIME
   const nextShell: SiteShell = {
@@ -437,14 +445,6 @@ function rewritePageMediaUrls(page: Page, originRaw: string): boolean {
     }
   }
   return changed
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
 }
 
 export async function handleLadipageBridgeRoutes(
