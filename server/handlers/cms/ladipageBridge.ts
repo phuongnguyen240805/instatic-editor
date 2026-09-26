@@ -22,7 +22,16 @@ import { renderPublishedSnapshot } from '../../publish/publicRenderer'
 import { applyPublishedHtmlPipeline } from '../../publish/publishedHtmlPipeline'
 import { readArtefact } from '../../publish/staticArtefact'
 import { nanoid } from 'nanoid'
-import { classKindSelector, createNode, type PageNode, type SiteShell, type StyleRule } from '@core/page-tree'
+import {
+  classKindSelector,
+  createDefaultSiteExplorerOrganization,
+  createNode,
+  DEFAULT_BREAKPOINTS,
+  DEFAULT_SITE_SETTINGS,
+  type PageNode,
+  type SiteShell,
+  type StyleRule,
+} from '@core/page-tree'
 import { DEFAULT_SITE_RUNTIME, DEFAULT_STYLE_RUNTIME_CONFIG } from '@core/site-runtime'
 import type { Page } from '@core/page-tree'
 import { importHtml } from '@core/htmlImport'
@@ -187,14 +196,70 @@ function linkImportedClassNames(
   return ids
 }
 
+async function ensureDraftSite(db: DbClient): Promise<SiteShell> {
+  const existing = await getDraftSite(db)
+  if (existing) return existing
+  const now = Date.now()
+  const shell: SiteShell = {
+    id: 'default',
+    name: 'Site',
+    breakpoints: DEFAULT_BREAKPOINTS,
+    settings: structuredClone(DEFAULT_SITE_SETTINGS),
+    styleRules: {},
+    files: [],
+    explorer: createDefaultSiteExplorerOrganization(),
+    packageJson: { dependencies: {}, devDependencies: {} },
+    runtime: { ...DEFAULT_SITE_RUNTIME },
+    createdAt: now,
+    updatedAt: now,
+  }
+  await saveDraftSite(db, shell, null)
+  return shell
+}
+
+function resolveImportedClassIds(
+  classIds: readonly string[] | undefined,
+  siteRules: Record<string, StyleRule>,
+  byName: Map<string, string>,
+): string[] {
+  if (!classIds?.length) return []
+  const ids: string[] = []
+  for (const value of classIds) {
+    if (siteRules[value]) {
+      if (!ids.includes(value)) ids.push(value)
+      continue
+    }
+    for (const linked of linkImportedClassNames([value], siteRules, byName)) {
+      if (!ids.includes(linked)) ids.push(linked)
+    }
+  }
+  return ids
+}
+
+async function relinkPageClassNames(db: DbClient, page: Page): Promise<boolean> {
+  const shell = await ensureDraftSite(db)
+  const byName = indexStyleRulesByName(shell.styleRules)
+  let changed = false
+  for (const node of Object.values(page.nodes)) {
+    const next = resolveImportedClassIds(node.classIds, shell.styleRules, byName)
+    if (next.length !== node.classIds.length || next.some((id, i) => id !== node.classIds[i])) {
+      node.classIds = next
+      changed = true
+    }
+  }
+  if (changed) {
+    await saveDraftSite(db, { ...shell, updatedAt: Date.now() }, null)
+  }
+  return changed
+}
+
 async function applyImportedStyles(
   db: DbClient,
   fragment: ReturnType<typeof importHtml>,
   nodes: Record<string, PageNode>,
   rootNode: PageNode,
 ): Promise<void> {
-  const shell = await getDraftSite(db)
-  if (!shell) return
+  const shell = await ensureDraftSite(db)
 
   const byName = indexStyleRulesByName(shell.styleRules)
   const parsedCss = fragment.styleCss.trim()
@@ -364,8 +429,7 @@ async function upsertImportedStylesheet(
   pageId: string,
   css: string,
 ): Promise<void> {
-  const shell = await getDraftSite(db)
-  if (!shell) return
+  const shell = await ensureDraftSite(db)
   const safeId = pageId.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 80) || 'page'
   const path = `imported/ladipage-${safeId}.css`
   const files = Array.isArray(shell.files) ? [...shell.files] : []
@@ -525,15 +589,18 @@ export async function handleLadipageBridgeRoutes(
       })
       importedNodeCount = imported.importedNodeCount
     } else {
+      let pageChanged = false
       if (page && body.assetOrigin) {
-        if (rewritePageMediaUrls(page, body.assetOrigin)) {
-          await saveDataRowDraft(
-            db,
-            page.id,
-            { cells: pageToCells(page), slug: page.slug },
-            null,
-          )
-        }
+        pageChanged = rewritePageMediaUrls(page, body.assetOrigin)
+      }
+      if (page && (await relinkPageClassNames(db, page))) pageChanged = true
+      if (page && pageChanged) {
+        await saveDataRowDraft(
+          db,
+          page.id,
+          { cells: pageToCells(page), slug: page.slug },
+          null,
+        )
       }
       if (linkedCss) {
         await upsertImportedStylesheet(db, pageId, linkedCss)

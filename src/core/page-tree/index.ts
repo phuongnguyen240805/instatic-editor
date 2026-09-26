@@ -163,6 +163,7 @@ export {
   assertValidCssClassName,
   styleRuleSelector,
   classNamesForClassIds,
+  isBareCssClassName,
 } from './classNames'
 export type { StyleRuleRegistry } from './classNames'
 

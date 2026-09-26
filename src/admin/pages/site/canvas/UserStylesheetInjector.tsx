@@ -28,6 +28,7 @@ import { useEffect } from 'react'
 import { useEditorStore } from '@site/store/store'
 import { collectUserStylesheetCss } from '@core/publisher'
 import { resolveViewportUnitsForCanvas, type CanvasViewport } from './resolveViewportUnits'
+import { wrapUserStylesheetCss } from './wrapUserStylesheetCss'
 
 const STYLE_TAG_ID = 'mc-user-styles'
 
@@ -69,13 +70,9 @@ export function UserStylesheetInjector({ targetDocument, viewport }: UserStylesh
       styleEl.setAttribute('data-source', 'UserStylesheetInjector')
       targetDoc.head.appendChild(styleEl)
     }
-    // Wrap in a named cascade layer so editor-chrome CSS (unlayered, from
-    // EditorChromeInjector) always wins over user-authored stylesheets regardless
-    // of specificity. User styles still cascade among themselves normally inside
-    // the layer (source order + specificity preserved).
-    styleEl.textContent = css
-      ? `@layer user-authored {\n${css}\n}`
-      : '/* no user stylesheets */'
+    // Hoist @import out of @layer — nested @import is invalid and drops the
+    // rest of the Bedimcode stylesheet (grid, :root tokens, section layout).
+    styleEl.textContent = wrapUserStylesheetCss(css)
   }, [targetDocument, css])
 
   useEffect(() => {

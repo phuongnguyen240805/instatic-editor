@@ -3,9 +3,9 @@ import { createSqliteClient } from '../../db/sqlite'
 import { sqliteMigrations } from '../../db/migrations-sqlite'
 import { runMigrations } from '../../db/runMigrations'
 import type { DbClient } from '../../db/client'
-import { listDataRows } from '../../repositories/data'
+import { listDataRows, saveDataRowDraft } from '../../repositories/data'
 import { getDraftSite, saveDraftSite } from '../../repositories/site'
-import { pageFromRow } from '../../../src/core/data/pageFromRow'
+import { pageFromRow, pageToCells } from '../../../src/core/data/pageFromRow'
 import { handleLadipageBridgeRoutes } from './ladipageBridge'
 import {
   createDefaultSiteExplorerOrganization,
@@ -206,6 +206,82 @@ describe('handleLadipageBridgeRoutes', () => {
     const importedSheet = site!.files.find((file) => file.path === 'imported/ladipage-p1.css')
     expect(importedSheet?.content).toContain('--text-color:#393939')
     expect(importedSheet?.content).toContain('body{color:var(--text-color)}')
+  })
+
+  test('import-html without a pre-created site shell still links classes and stores CSS', async () => {
+    const db = await createInMemoryTestDb()
+    const req = new Request('http://localhost/admin/api/cms/ladipage/import-html', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        pageId: 'p1',
+        title: 'Restaurant',
+        html: '<style>.bd-grid{display:grid}</style><div class="bd-grid"><h1>Tasty food</h1></div>',
+      }),
+    })
+
+    expect((await handleLadipageBridgeRoutes(req, db))!.status).toBe(200)
+
+    const site = await getDraftSite(db)
+    expect(site).not.toBeNull()
+    const gridRule = Object.values(site!.styleRules).find((rule) => rule.name === 'bd-grid')
+    expect(gridRule).toBeDefined()
+
+    const row = (await listDataRows(db, 'pages')).find((candidate) => candidate.id === 'p1')
+    const page = pageFromRow(row!)
+    const gridNode = Object.values(page.nodes).find((node) => node.classIds.includes(gridRule!.id))
+    expect(gridNode).toBeDefined()
+    expect(site!.files.some((file) => file.content?.includes('.bd-grid{display:grid}'))).toBe(true)
+  })
+
+  test('import-html relinks class names on an existing page when CSS is upserted', async () => {
+    const db = await createInMemoryTestDb()
+    await saveTestShell(db)
+    const createReq = new Request('http://localhost/admin/api/cms/ladipage/import-html', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        pageId: 'p1',
+        title: 'Existing',
+        html: '<div class="bd-grid"><h1>Hello</h1></div>',
+      }),
+    })
+    expect((await handleLadipageBridgeRoutes(createReq, db))!.status).toBe(200)
+
+    const rows = await listDataRows(db, 'pages')
+    const page = pageFromRow(rows.find((row) => row.id === 'p1')!)
+    const gridNode = Object.values(page.nodes).find((node) =>
+      node.classIds.some((id) => id === 'bd-grid' || id.length > 0),
+    )
+    expect(gridNode).toBeDefined()
+    // Simulate a pre-linker import: classIds stored as HTML class names.
+    gridNode!.classIds = ['bd-grid']
+    await saveDataRowDraft(
+      db,
+      page.id,
+      { cells: pageToCells(page), slug: page.slug },
+      null,
+    )
+
+    const updateReq = new Request('http://localhost/admin/api/cms/ladipage/import-html', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        pageId: 'p1',
+        html: '<div class="bd-grid"><h1>Hello</h1></div>',
+        linkedCss: '.bd-grid{display:grid}',
+        replaceIfEmpty: true,
+      }),
+    })
+    expect((await handleLadipageBridgeRoutes(updateReq, db))!.status).toBe(200)
+
+    const site = await getDraftSite(db)
+    const gridRule = Object.values(site!.styleRules).find((rule) => rule.name === 'bd-grid')
+    expect(gridRule).toBeDefined()
+    const after = pageFromRow((await listDataRows(db, 'pages')).find((row) => row.id === 'p1')!)
+    const relinked = Object.values(after.nodes).find((node) => node.classIds.includes(gridRule!.id))
+    expect(relinked).toBeDefined()
+    expect(relinked!.classIds).not.toContain('bd-grid')
   })
 
   test('unknown ladipage path is 404 with path', async () => {

@@ -33,33 +33,40 @@ export function styleRuleSelector(cls: Pick<StyleRule, 'selector'>): string {
   return cls.selector
 }
 
-function classNameForClassId(
-  classes: StyleRuleRegistry,
-  classId: string,
-): string | null {
-  const cls = classes?.[classId]
-  if (!cls) return null
-  // Only class-kind rules contribute a token to the node's `class=` attribute.
-  // Ambient rules attach by selector matching, not by a class-attribute token.
-  if (cls.kind !== 'class') return null
-  return cls.name
+/**
+ * HTML import stamps `el.classList` names onto `node.classIds` before those
+ * names are linked to registry ids. If linking never ran (no site shell, or
+ * an existing page that was imported before the linker), dropping unknown
+ * ids leaves the canvas with no `class=` tokens — imported CSS like
+ * `.bd-grid { display: grid }` matches nothing. Bare CSS class names are
+ * therefore emitted as-is; nanoid-looking ids and ambient rules stay dropped.
+ */
+const BARE_CSS_CLASS_NAME_RE = /^-?[_a-zA-Z]+[_a-zA-Z0-9-]*$/
+
+export function isBareCssClassName(value: string): boolean {
+  return BARE_CSS_CLASS_NAME_RE.test(value)
 }
 
 /**
  * Resolve a node's `classIds` to the class-attribute tokens the publisher
  * should write. Ambient-kind rules are silently filtered out — they never
- * belong in `class="..."`. Unknown ids are also dropped.
+ * belong in `class="..."`. Unknown ids that are valid CSS class names
+ * (unlinked HTML import names) are preserved.
  */
 export function classNamesForClassIds(
   classes: StyleRuleRegistry,
   classIds: readonly string[] | undefined,
 ): string[] {
-  if (!classes || !classIds?.length) return []
+  if (!classIds?.length) return []
 
   const names: string[] = []
   for (const id of classIds) {
-    const name = classNameForClassId(classes, id)
-    if (name) names.push(name)
+    const cls = classes?.[id]
+    if (cls) {
+      if (cls.kind === 'class') names.push(cls.name)
+      continue
+    }
+    if (isBareCssClassName(id)) names.push(id)
   }
   return names
 }
