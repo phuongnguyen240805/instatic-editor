@@ -40,6 +40,8 @@ import type { RegisteredPluginToolbarButton } from '@core/plugin-sdk'
 import { AccountMenuButton } from '@admin/shared/AccountMenuButton'
 import { OpenLivePageButton } from '@admin/shared/OpenLivePageButton'
 import { SettingsButton } from './SettingsButton'
+import { BackToLadipageLink } from '@admin/ladipage/BackToLadipageLink'
+import { isLadipageHostMode } from '@admin/ladipage/hostMode'
 import { Link } from '@admin/lib/routing'
 import { Button } from '@ui/components/Button'
 import { Skeleton } from '@ui/components/Skeleton'
@@ -199,7 +201,11 @@ export function Toolbar({
             </span>
           </Tooltip>
         )}
-        {adminNavigationSlot ?? <DefaultAdminNavigation section={section} />}
+        {isLadipageHostMode() ? (
+          <BackToLadipageLink />
+        ) : (
+          (adminNavigationSlot ?? <DefaultAdminNavigation section={section} />)
+        )}
 
         <div className={styles.workspaceToolbarItems}>
           {pluginButtons.map((button) => {

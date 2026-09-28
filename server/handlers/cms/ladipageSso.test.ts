@@ -118,7 +118,9 @@ describe('verifyLadipageSsoToken', () => {
       expect(first!.status).toBe(302)
       expect(second!.status).toBe(302)
       expect(first!.headers.get('location')).toContain('/admin/site?table=pages&row=page_lp_b')
+      expect(first!.headers.get('location')).toContain('host=ladipage')
       expect(second!.headers.get('location')).toContain('/admin/site?table=pages&row=page_lp_b')
+      expect(second!.headers.get('location')).toContain('host=ladipage')
       expect(second!.headers.get('set-cookie')).toContain(`${SESSION_COOKIE_NAME}=`)
     } finally {
       if (previousSecret == null) {

@@ -1,0 +1,48 @@
+/*
+ * LadiPage host shell. Only applies when SSO set html[data-host="ladipage"].
+ * Does not change canvas tokens; hides CMS chrome customers must not open.
+ */
+
+html[data-host="ladipage"] a[href="/admin/dashboard"],
+html[data-host="ladipage"] a[href="/admin/content"],
+html[data-host="ladipage"] a[href="/admin/data"],
+html[data-host="ladipage"] a[href="/admin/media"],
+html[data-host="ladipage"] a[href="/admin/plugins"],
+html[data-host="ladipage"] a[href^="/admin/plugins/"],
+html[data-host="ladipage"] a[href="/admin/users"],
+html[data-host="ladipage"] a[href="/admin/ai"],
+html[data-host="ladipage"] a[href="/admin/account"],
+html[data-host="ladipage"] [data-testid="toolbar-settings-btn"],
+html[data-host="ladipage"] [data-testid="account-menu-trigger"] {
+  display: none !important;
+}
+
+html[data-host="ladipage"] [data-ladipage-back] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: 10px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: var(--text-s);
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+
+html[data-host="ladipage"] [data-ladipage-back]:hover {
+  background: var(--bg-surface-2);
+}
+
+html[data-host="ladipage"] [data-ladipage-auth] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 100dvh;
+  padding: 24px;
+  text-align: center;
+}

@@ -4,6 +4,8 @@ import { AppLoadingScreen } from './AppLoadingScreen'
 import type { AdminWorkspace } from './workspace'
 import { AdminPreAuthForm, type PreAuthPhase } from './preauth/AdminPreAuthForm'
 import { useAdminBoot } from './preauth/useAdminBoot'
+import { isLadipageHostMode } from './ladipage/hostMode'
+import { LadipageHostAuthScreen } from './ladipage/LadipageHostAuthScreen'
 import { prewarmedLazy } from './lib/prewarmedLazy'
 import { useEditorAppearancePreferences } from '@site/preferences/editorPreferences'
 
@@ -80,6 +82,10 @@ export default function AdminEntry({ section = 'dashboard' }: AdminEntryProps) {
         <AuthenticatedAdmin section={section} currentUser={liveUser} />
       </Suspense>
     )
+  }
+
+  if (isLadipageHostMode()) {
+    return <LadipageHostAuthScreen />
   }
 
   return (

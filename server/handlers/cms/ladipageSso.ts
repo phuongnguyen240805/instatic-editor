@@ -181,6 +181,7 @@ function ssoTargetFromClaims(claims: Record<string, unknown>): {
     params.set('row', instaticPageId)
   }
   if (publicUrl) params.set('lpUrl', publicUrl)
+  params.set('host', 'ladipage')
   const query = params.toString()
   const redirectPath = query ? `/admin/site?${query}` : '/admin/site'
   return { ladipagePageId, instaticPageId, siteId, publicUrl, redirectPath }
@@ -329,6 +330,7 @@ export async function handleLadipageSso(req: Request, db: DbClient): Promise<Res
       params.set('table', 'pages')
       params.set('row', ensured.pageId)
       if (target.publicUrl) params.set('lpUrl', target.publicUrl)
+      params.set('host', 'ladipage')
       redirectPath = `/admin/site?${params.toString()}`
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

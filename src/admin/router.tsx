@@ -5,6 +5,15 @@ import { useLocation } from './lib/routing'
 import { ErrorBoundary } from '@ui/components/ErrorBoundary'
 import { AppLoadingScreen } from './AppLoadingScreen'
 import AdminEntry from './AdminEntry'
+import { isLadipageHostMode } from './ladipage/hostMode'
+
+function LadipageSiteRedirect() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  params.set('host', 'ladipage')
+  const query = params.toString()
+  return <Navigate to={query ? `/admin/site?${query}` : '/admin/site'} replace />
+}
 
 // AdminEntry is eager-imported (not behind `React.lazy`) so the cold load
 // path does not require Suspense resolution before the first contentful
@@ -49,22 +58,24 @@ function withRouteBoundary(element: ReactElement): ReactElement {
 }
 
 export function AdminRoutes() {
+  const ladipageHost = isLadipageHostMode()
+  const cmsHome = ladipageHost ? <LadipageSiteRedirect /> : <Navigate to="/admin/dashboard" replace />
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
-      <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-      <Route path="/admin/dashboard" element={withRouteBoundary(<AdminEntry section="dashboard" />)} />
+      <Route path="/" element={cmsHome} />
+      <Route path="/admin" element={cmsHome} />
+      <Route path="/admin/dashboard" element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="dashboard" />)} />
       <Route path="/admin/site" element={withRouteBoundary(<AdminEntry section="site" />)} />
-      <Route path="/admin/content" element={withRouteBoundary(<AdminEntry section="content" />)} />
-      <Route path="/admin/data" element={withRouteBoundary(<AdminEntry section="data" />)} />
-      <Route path="/admin/media" element={withRouteBoundary(<AdminEntry section="media" />)} />
-      <Route path="/admin/plugins" element={withRouteBoundary(<AdminEntry section="plugins" />)} />
-      <Route path="/admin/users" element={withRouteBoundary(<AdminEntry section="users" />)} />
-      <Route path="/admin/ai" element={withRouteBoundary(<AdminEntry section="ai" />)} />
-      <Route path="/admin/account" element={withRouteBoundary(<AdminEntry section="account" />)} />
+      <Route path="/admin/content" element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="content" />)} />
+      <Route path="/admin/data" element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="data" />)} />
+      <Route path="/admin/media" element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="media" />)} />
+      <Route path="/admin/plugins" element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="plugins" />)} />
+      <Route path="/admin/users" element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="users" />)} />
+      <Route path="/admin/ai" element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="ai" />)} />
+      <Route path="/admin/account" element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="account" />)} />
       <Route
         path="/admin/plugins/:pluginId/:pageId"
-        element={withRouteBoundary(<AdminEntry section="pluginPage" />)}
+        element={ladipageHost ? cmsHome : withRouteBoundary(<AdminEntry section="pluginPage" />)}
       />
       {/* Catch-all for ADMIN paths only — an unknown /admin URL (typo, stale
           deep link, /admin/login) must never render an empty tree.
@@ -74,7 +85,7 @@ export function AdminRoutes() {
           pipeline's NotFound template) and must never be swallowed by the
           admin SPA. MUST stay the last route: <Routes> takes the first match
           in declaration order. */}
-      <Route path="/admin/*" element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="/admin/*" element={cmsHome} />
     </Routes>
   )
 }
