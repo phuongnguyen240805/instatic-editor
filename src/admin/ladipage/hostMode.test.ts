@@ -5,6 +5,8 @@ describe('ladipage host mode', () => {
   afterEach(() => {
     sessionStorage.clear()
     delete document.documentElement.dataset.host
+    document.documentElement.removeAttribute('data-editor-theme')
+    document.documentElement.classList.add('dark')
     document.title = 'Instatic'
     window.history.replaceState({}, '', '/admin/site')
   })
@@ -18,8 +20,16 @@ describe('ladipage host mode', () => {
     activateLadipageHostMode()
     expect(isLadipageHostMode()).toBe(true)
     expect(document.documentElement.dataset.host).toBe('ladipage')
-    expect(document.title).toBe('LadiPage Editor')
+    expect(document.title).toBe('Kedi Editor')
+    expect(document.documentElement.getAttribute('data-editor-theme')).toBe('light')
     expect(ladipagePagesListUrl()).toBe('https://ladipage.example/landing-pages')
+  })
+
+  test('applies the parent dark theme from the SSO query', () => {
+    window.history.replaceState({}, '', '/admin/site?host=ladipage&theme=dark')
+    activateLadipageHostMode()
+    expect(document.documentElement.getAttribute('data-editor-theme')).toBe('dark')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
   test('stays off without SSO host markers', () => {

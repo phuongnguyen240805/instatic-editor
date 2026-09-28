@@ -141,6 +141,14 @@ function ssoRedirectLocation(req: Request, path: string): string {
   return `${proto}://${host}${path}`
 }
 
+function withIncomingTheme(path: string, req: Request): string {
+  const theme = new URL(req.url).searchParams.get('theme')
+  if (theme !== 'light' && theme !== 'dark') return path
+  const next = new URL(path, 'http://ladipage.local')
+  next.searchParams.set('theme', theme)
+  return `${next.pathname}${next.search}`
+}
+
 function redirectTo(req: Request, path: string): Response {
   return new Response(null, {
     status: 302,
@@ -368,6 +376,6 @@ export async function handleLadipageSso(req: Request, db: DbClient): Promise<Res
     ...requestAuditContext(req),
   })
 
-  const res = redirectTo(req, redirectPath)
+  const res = redirectTo(req, withIncomingTheme(redirectPath, req))
   return setCookieHeader(res, sessionCookie(req, sessionToken, expiresAt))
 }

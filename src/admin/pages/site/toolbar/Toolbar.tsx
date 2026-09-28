@@ -41,7 +41,7 @@ import { AccountMenuButton } from '@admin/shared/AccountMenuButton'
 import { OpenLivePageButton } from '@admin/shared/OpenLivePageButton'
 import { SettingsButton } from './SettingsButton'
 import { BackToLadipageLink } from '@admin/ladipage/BackToLadipageLink'
-import { isLadipageHostMode } from '@admin/ladipage/hostMode'
+import { isLadipageHostMode, KEDI_BRAND, kediToolbarLogoSrc } from '@admin/ladipage/hostMode'
 import { Link } from '@admin/lib/routing'
 import { Button } from '@ui/components/Button'
 import { Skeleton } from '@ui/components/Skeleton'
@@ -101,7 +101,8 @@ export function Toolbar({
   )
   const [pluginStatuses, setPluginStatuses] = useState<Record<string, PluginButtonStatus>>({})
   const [statusTimers] = useState(() => new Map<string, ReturnType<typeof setTimeout>>())
-  const configuredFaviconUrl = faviconUrl?.trim()
+  const hostMode = isLadipageHostMode()
+  const configuredFaviconUrl = hostMode ? kediToolbarLogoSrc() : faviconUrl?.trim()
 
   useEffect(() => {
     return pluginRuntime.subscribe(() => {
@@ -172,7 +173,17 @@ export function Toolbar({
       >
         {/* ── Left section ────────────────────────────────────────────────── */}
 
-        {siteName === null ? (
+        {hostMode ? (
+          <Tooltip content={KEDI_BRAND.name} side="bottom">
+            <img
+              className={styles.siteFavicon}
+              data-testid="toolbar-site-brand"
+              src={configuredFaviconUrl}
+              alt={KEDI_BRAND.name}
+              draggable={false}
+            />
+          </Tooltip>
+        ) : siteName === null ? (
           <span
             className={styles.siteNameSkeleton}
             data-testid="toolbar-site-brand"
@@ -201,7 +212,7 @@ export function Toolbar({
             </span>
           </Tooltip>
         )}
-        {isLadipageHostMode() ? (
+        {hostMode ? (
           <BackToLadipageLink />
         ) : (
           (adminNavigationSlot ?? <DefaultAdminNavigation section={section} />)

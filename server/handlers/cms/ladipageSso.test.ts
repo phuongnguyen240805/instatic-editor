@@ -111,7 +111,9 @@ describe('verifyLadipageSsoToken', () => {
         exp: Math.floor(Date.now() / 1000) + 60,
         jti: randomBytes(8).toString('hex'),
       })
-      const req = new Request(`http://localhost/admin/api/cms/auth/ladipage-sso?token=${token}`)
+      const req = new Request(
+        `http://localhost/admin/api/cms/auth/ladipage-sso?token=${token}&theme=light`,
+      )
       const first = await handleLadipageSso(req, db)
       const second = await handleLadipageSso(req, db)
 
@@ -119,6 +121,7 @@ describe('verifyLadipageSsoToken', () => {
       expect(second!.status).toBe(302)
       expect(first!.headers.get('location')).toContain('/admin/site?table=pages&row=page_lp_b')
       expect(first!.headers.get('location')).toContain('host=ladipage')
+      expect(first!.headers.get('location')).toContain('theme=light')
       expect(second!.headers.get('location')).toContain('/admin/site?table=pages&row=page_lp_b')
       expect(second!.headers.get('location')).toContain('host=ladipage')
       expect(second!.headers.get('set-cookie')).toContain(`${SESSION_COOKIE_NAME}=`)

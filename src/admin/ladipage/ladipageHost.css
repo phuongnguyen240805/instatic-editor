@@ -36,6 +36,18 @@ html[data-host="ladipage"] [data-ladipage-back]:hover {
   background: var(--bg-surface-2);
 }
 
+html[data-host="ladipage"][data-editor-theme="light"] [data-testid="toolbar"] {
+  background: #ffffff;
+  border-bottom-color: #e2e8f0;
+}
+
+html[data-host="ladipage"] [data-testid="toolbar-site-brand"] {
+  height: 22px;
+  width: auto;
+  max-width: 92px;
+  object-fit: contain;
+}
+
 html[data-host="ladipage"] [data-ladipage-auth] {
   display: flex;
   flex-direction: column;

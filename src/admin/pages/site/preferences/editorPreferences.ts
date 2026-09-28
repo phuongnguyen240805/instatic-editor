@@ -29,6 +29,7 @@ import {
   type BooleanPreferenceId,
   type SelectPreferenceId,
 } from './catalog'
+import { applyLadipageChromeTheme, isLadipageHostMode, ladipageChromeTheme } from '@admin/ladipage/hostMode'
 
 export const EDITOR_PREFS_KEY = 'instatic-editor-prefs'
 
@@ -239,8 +240,12 @@ export function applyEditorAppearancePreferencesToDocument(
   prefs: EditorAppearancePreferences,
 ): void {
   doc.documentElement.setAttribute('data-editor-density', prefs.density)
-  doc.documentElement.setAttribute('data-editor-theme', prefs.theme)
   doc.documentElement.setAttribute('data-editor-text-scale', prefs.textScale)
+  if (isLadipageHostMode()) {
+    applyLadipageChromeTheme(ladipageChromeTheme())
+    return
+  }
+  doc.documentElement.setAttribute('data-editor-theme', prefs.theme)
 }
 
 export function useEditorAppearancePreferences(): EditorAppearancePreferences {
